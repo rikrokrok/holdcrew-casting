@@ -20,9 +20,16 @@ Greenfield. **Tasks 1–4 done + verified locally; not yet on the box.**
   tenant-scoped. `scripts/smoke.js` = 19/19 incl. isolation.
 - **4 front-end** — `public/casting.html` (the approved board) wired to the real API; served gated
   at `/casting.html?job=<suffix>`; `public/css/casting.css` self-contained; `public/login.html`.
-- DNS wildcard `*.casting.holdcrew.com` created (Eric). **NOT DONE:** box bring-up (Caddy block →
-  :4100, systemd unit, onboard real tenants), git init, media/Wasabi (task 6), CSV import (task 5),
-  client presentation (task 7). Local dev DB has test tenants upshot/iq (test passwords).
+**LIVE on the box (2026-07-07):** systemd unit `holdcrew-casting` (:4100, enabled at boot,
+logs `/var/log/holdcrew-casting.log`); Caddy `*.casting.holdcrew.com` block → :4100 (wildcard cert via
+DO DNS-01, issued). Tenant `upshot` onboarded (temp password). Verified over TLS at
+`https://upshot.casting.holdcrew.com` — login gate, board page, API persistence round-trip; reels
+unaffected. Git: committed locally (`git init`, branch `main`); **push pending** — GitHub repo
+`rikrokrok/holdcrew-casting` must be created first (no `gh`/token on box; SSH key works).
+**NOT DONE:** git push (needs repo), media/Wasabi (task 6), CSV import (task 5), client presentation
+(task 7), job.html tile (task 9, decoupled).
+- Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
+  re-running. `.env` not needed until the media slice (service runs on defaults).
 
 ## Stack / infra (target)
 - Node/Express, own port **:4100** (reels is :4000). systemd unit + Caddy wildcard
