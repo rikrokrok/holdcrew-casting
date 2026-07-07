@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════
+   HoldCrew Casting — base design system
+   (tokens + base classes shared with the HoldCrew suite; page-specific
+   styles live in casting.html's own <style>)
+═══════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:            #0a0a0a;
+  --surface:       #111111;
+  --surface-mid:   #161616;
+  --surface-raised:#1c1c1c;
+  --border:        #2a2a2a;
+  --border-inner:  #1e1e1e;
+  --amber:         #f5a623;
+  --amber-dim:     #c47f00;
+  --text:          #e0e0e0;
+  --subtle:        #888;
+  --muted:         #555;
+  --dim:           #333;
+  --green:         #3ecf70;
+  --red:           #e05c5c;
+
+  --font-display:  'Bebas Neue', Impact, sans-serif;
+  --font-mono:     'DM Mono', Consolas, monospace;
+  --font-body:     'DM Sans', Helvetica, Arial, sans-serif;
+
+  --radius:        6px;
+  --radius-lg:     10px;
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+body { min-height: 100vh; }
+a { color: var(--amber); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.job-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 1.5rem;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+.loading {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--subtle);
+  padding: 2rem;
+  text-align: center;
+}
+.load-err {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--red);
+  padding: 2rem;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .job-header { gap: 0.75rem; padding: 0 1rem; }
+  .page { padding: 1.25rem 1rem; }
+}

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Casting — HoldCrew</title>
+  <link rel="stylesheet" href="/css/casting.css">
+  <style>
+    .job-header__back { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); text-decoration: none; flex-shrink: 0; }
+    .job-header__back:hover { color: var(--amber); }
+    .job-header__name { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.04em; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-header__tool { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; color: var(--amber); flex-shrink: 0; }
+
+    /* preview banner — remove once wired to a backend */
+    .preview-note { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--amber-dim); background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.18); border-radius: var(--radius); padding: 7px 12px; margin-bottom: 1rem; }
+
+    /* ── tab switcher ── */
+    .tabs { display: flex; gap: 2px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 2px; margin-bottom: 1.1rem; }
+    .tab { flex: 1; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); background: var(--bg); border: none; border-radius: 8px; padding: 10px 8px; cursor: pointer; transition: color 0.12s, background 0.12s; }
+    .tab:hover { color: var(--text); }
+    .tab.on { color: #000; background: var(--amber); font-weight: 600; }
+    .tab__n { opacity: 0.6; margin-left: 5px; font-size: 10px; }
+    .tab.on .tab__n { opacity: 0.75; }
+
+    /* ── shared: photo + video + status ── */
+    .badge { display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; border: 1px solid transparent; white-space: nowrap; }
+    .badge--booked    { color: #000; background: var(--green); border-color: var(--green); font-weight: 600; }
+    .badge--select    { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 600; }
+    .badge--recommend { color: var(--amber); background: rgba(245,166,35,0.12); border-color: rgba(245,166,35,0.4); }
+    .badge--backup    { color: var(--amber-dim); background: rgba(196,127,0,0.08); border-color: rgba(196,127,0,0.3); }
+    .badge--callback  { color: #6fa8dc; background: rgba(111,168,220,0.1); border-color: rgba(111,168,220,0.32); }
+    .badge--shortlist { color: var(--subtle); background: none; border-color: var(--border); }
+    .badge--pass      { color: var(--red); background: rgba(224,92,92,0.06); border-color: rgba(224,92,92,0.22); }
+    .badge--unassigned{ color: var(--muted); background: none; border-color: var(--dim); }
+
+    /* video chip / play affordance — tier-1, always at hand */
+    .vchip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text); background: rgba(0,0,0,0.55); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px 4px 8px; cursor: pointer; }
+    .vchip:hover { border-color: var(--amber); color: var(--amber); }
+    .vchip__play { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--amber); color: #000; font-size: 8px; }
+    .vchip--none { color: var(--muted); border-style: dashed; cursor: default; }
+    .vchip--none:hover { border-color: var(--border); color: var(--muted); }
+
+    /* ── CATTLE CALL grid ── */
+    .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+    .cc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; transition: border-color 0.12s, transform 0.08s; }
+    .cc-card:hover { border-color: var(--subtle); }
+    .cc-card:active { transform: scale(0.995); }
+    .cc-photo { position: relative; width: 100%; aspect-ratio: 3 / 4; background: var(--surface-raised); display: block; }
+    .cc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cc-photo__video { position: absolute; left: 8px; bottom: 8px; }
+    .cc-body { padding: 10px 12px 12px; }
+    .cc-name { font-size: 15px; color: var(--text); font-weight: 500; line-height: 1.2; }
+    .cc-pronouns { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 1px; min-height: 12px; }
+    .cc-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+    .cc-rolechip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; color: var(--subtle); }
+
+    /* ── SELECTS (role-based) ── */
+    .roles-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.1rem; }
+    .roles-bar__label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .role-pill { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--text); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; }
+    .role-pill b { color: var(--amber); font-weight: 600; }
+    .add-role-btn { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--subtle); background: none; border: 1px dashed var(--border); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+    .add-role-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+    .role-sec { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); margin-bottom: 14px; overflow: hidden; }
+    .role-head { display: flex; align-items: baseline; gap: 0.7rem; padding: 12px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border); cursor: pointer; }
+    .role-head__name { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.05em; color: var(--amber); line-height: 1; }
+    .role-head__char { font-family: var(--font-body); font-size: 12px; font-style: italic; color: var(--subtle); }
+    .role-head__count { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+    .role-head__chev { color: var(--dim); font-size: 12px; transition: transform 0.15s; }
+    .role-sec.collapsed .role-head__chev { transform: rotate(-90deg); }
+    .role-sec.collapsed .role-body { display: none; }
+    .role-present { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--amber); text-decoration: none; padding: 4px 6px; }
+    .role-present:hover { text-decoration: underline; }
+
+    .sel-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border-inner); cursor: pointer; }
+    .sel-row:last-child { border-bottom: none; }
+    .sel-row:hover { background: var(--surface-mid); }
+    .sel-thumb { width: 46px; height: 58px; border-radius: 6px; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; }
+    .sel-main { flex: 1; min-width: 0; }
+    .sel-name { font-size: 14px; color: var(--text); font-weight: 500; }
+    .sel-sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .sel-status { flex-shrink: 0; }
+    .role-empty { padding: 14px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+    /* ── detail drawer (shared by both tabs) ── */
+    .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem 1rem; overflow-y: auto; }
+    .modal-back.hidden { display: none; }
+    .hidden { display: none; }
+    .drawer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 100%; max-width: 560px; overflow: hidden; }
+    .dr-top { display: flex; gap: 16px; padding: 18px; border-bottom: 1px solid var(--border); }
+    .dr-photo { width: 132px; aspect-ratio: 3/4; border-radius: 8px; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; }
+    .dr-head { flex: 1; min-width: 0; }
+    .dr-name { font-family: var(--font-display); font-size: 30px; letter-spacing: 0.03em; color: var(--text); line-height: 0.95; }
+    .dr-pronouns { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 3px 0 12px; }
+    .dr-close { background: none; border: none; color: var(--subtle); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px; }
+    .dr-close:hover { color: var(--amber); }
+
+    .dr-sec { padding: 16px 18px; border-bottom: 1px solid var(--border-inner); }
+    .dr-sec:last-child { border-bottom: none; }
+    .dr-sec__label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+    /* role assignment + per-role status inside drawer */
+    .rolerow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-inner); }
+    .rolerow:first-of-type { padding-top: 0; }
+    .rolerow:last-child { border-bottom: none; padding-bottom: 0; }
+    .role-toggle { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--subtle); background: none; border: none; cursor: pointer; flex: 1; text-align: left; }
+    .role-toggle__box { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--muted); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #000; }
+    .role-toggle.on .role-toggle__box { background: var(--amber); border-color: var(--amber); }
+    .role-toggle.on { color: var(--text); }
+    .role-toggle b { color: var(--amber); font-weight: 600; }
+    .st-select { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; cursor: pointer; }
+    .st-select:focus { outline: none; border-color: var(--amber); }
+    .st-select:disabled { opacity: 0.3; }
+
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+    .d-item { min-width: 0; }
+    .d-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .d-val { font-size: 13px; color: var(--text); word-break: break-word; }
+    .d-val a { color: var(--text); }
+    .d-val a:hover { color: var(--amber); }
+    .d-full { grid-column: 1 / -1; }
+    .avail-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .avail-tag { font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(62,207,112,0.08); color: var(--green); border: 1px solid rgba(62,207,112,0.25); }
+    .avail-tag.partial { background: rgba(245,166,35,0.1); color: var(--amber); border-color: rgba(245,166,35,0.3); }
+    .dr-note { font-family: var(--font-mono); font-size: 11.5px; color: var(--amber); font-style: italic; line-height: 1.6; }
+
+    /* video lightbox */
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+    .lightbox.hidden { display: none; }
+    .lb-inner { max-width: 720px; width: 100%; text-align: center; }
+    .lb-frame { width: 100%; aspect-ratio: 16/9; background: #000; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--subtle); font-family: var(--font-mono); font-size: 12px; }
+    .lb-frame video { width: 100%; height: 100%; border-radius: 10px; }
+    .lb-cap { margin-top: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+    .lb-close { position: absolute; top: 18px; right: 22px; color: var(--subtle); font-size: 26px; cursor: pointer; background: none; border: none; }
+    .lb-close:hover { color: var(--amber); }
+
+    .cast-empty { text-align: center; padding: 3rem 1.5rem; }
+    .cast-empty p { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); }
+
+    @media (max-width: 600px) {
+      .cc-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .dr-top { flex-direction: column; }
+      .dr-photo { width: 120px; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="job-header">
+    <a class="job-header__back" id="back-link" href="/">← Casting</a>
+    <div class="job-header__name" id="job-name">Casting</div>
+    <div class="job-header__tool">CASTING</div>
+  </header>
+
+  <main class="page">
+    <div id="cast-body"><div class="loading">Loading…</div></div>
+  </main>
+
+  <!-- candidate detail drawer -->
+  <div class="modal-back hidden" id="dr-back" onclick="closeDrawer(event)">
+    <div class="drawer" id="drawer" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- video lightbox -->
+  <div class="lightbox hidden" id="lightbox" onclick="closeVideo(event)">
+    <button class="lb-close" onclick="closeVideo()">&times;</button>
+    <div class="lb-inner" id="lb-inner"></div>
+  </div>
+
+  <script>
+    const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const params = new URLSearchParams(location.search);
+    const JOB = (params.get('job') || '').trim();
+    document.getElementById('job-name').textContent = JOB || 'Casting';
+
+    // v1 production lifecycle (creative ladder). Availability/first-refusal is a
+    // Casting-Director concern, deliberately out of scope here. order = best-first.
+    const STATUS = {
+      booked:    { label: 'Booked',    order: 0 },
+      select:    { label: 'Select',    order: 1 },
+      recommend: { label: 'Recommend', order: 2 },
+      backup:    { label: 'Backup',    order: 3 },
+      callback:  { label: 'Callback',  order: 4 },
+      shortlist: { label: 'Shortlist', order: 5 },
+      pass:      { label: 'Pass',      order: 6 },
+    };
+    const STATUS_KEYS = ['shortlist','callback','recommend','backup','select','booked','pass'];
+    function statusBadge(code) {
+      const m = STATUS[code] || STATUS.shortlist;
+      return `<span class="badge badge--${code}">${esc(m.label)}</span>`;
+    }
+
+    // ── API client (same-origin; the session cookie carries the tenant) ──
+    function toLogin() { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search); }
+    const api = {
+      async get(path) {
+        const r = await fetch(path, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        if (r.status === 401) { toLogin(); throw new Error('auth'); }
+        if (!r.ok) throw new Error('load_failed');
+        return r.json();
+      },
+      async send(method, path, body) {
+        const r = await fetch(path, {
+          method, headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (r.status === 401) { toLogin(); throw new Error('auth'); }
+        if (!r.ok) { let j = null; try { j = await r.json(); } catch (e) {} throw new Error((j && j.error) || ('http_' + r.status)); }
+        return r.status === 204 ? null : r.json();
+      },
+    };
+
+    let board = { project: null, roles: [], candidates: [] };
+    let roles = [];
+    let cands = [];
+    const byId = id => cands.find(c => c.id === id);
+    const roleById = id => roles.find(r => r.id === id);
+
+    // Headshot: real headshots (Wasabi) arrive with the media slice; until then a
+    // stable placeholder avatar keyed on the name so cards aren't blank.
+    function photoUrl(c) {
+      const seed = encodeURIComponent((c.name || '').trim());
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+    }
+
+    async function loadBoard() {
+      const el = document.getElementById('cast-body');
+      el.innerHTML = '<div class="loading">Loading…</div>';
+      try {
+        board = await api.get(`/api/casting/board?job=${encodeURIComponent(JOB)}`);
+        roles = board.roles || [];
+        cands = board.candidates || [];
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        el.innerHTML = `<div class="load-err">Couldn't load casting. <a href="#" onclick="loadBoard();return false;">Retry</a></div>`;
+      }
+    }
+
+    let activeTab = 'cattle';
+    function setTab(t) { activeTab = t; render(); }
+
+    function render() {
+      const el = document.getElementById('cast-body');
+      const assignedCount = cands.reduce((n, c) => n + (Object.keys(c.assignments || {}).length ? 1 : 0), 0);
+      el.innerHTML = `
+        <div class="tabs">
+          <button class="tab ${activeTab==='cattle'?'on':''}" onclick="setTab('cattle')">Cattle Call<span class="tab__n">${cands.length}</span></button>
+          <button class="tab ${activeTab==='selects'?'on':''}" onclick="setTab('selects')">Selects<span class="tab__n">${assignedCount}</span></button>
+        </div>
+        <div id="tab-body">${activeTab === 'cattle' ? cattleView() : selectsView()}</div>`;
+    }
+
+    // ── CATTLE CALL ──
+    function cattleView() {
+      if (!cands.length) return `<div class="cast-empty"><p>No submissions yet. Import a casting director's export to get started.</p></div>`;
+      return `<div class="cc-grid">${cands.map(cattleCard).join('')}</div>`;
+    }
+    function cattleCard(c) {
+      const roleIds = Object.keys(c.assignments || {});
+      const rolesHtml = roleIds.length
+        ? roleIds.map(rid => { const r = roleById(rid); return `<span class="cc-rolechip">${esc(r ? r.name : '—')}</span>${statusBadge(c.assignments[rid])}`; }).join(' ')
+        : `<span class="badge badge--unassigned">Unassigned</span>`;
+      const video = c.hasTape
+        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>Tape</span>`
+        : `<span class="vchip vchip--none">No tape</span>`;
+      return `<div class="cc-card" onclick="openDrawer('${c.id}')">
+        <div class="cc-photo">
+          <img src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
+          <div class="cc-photo__video">${video}</div>
+        </div>
+        <div class="cc-body">
+          <div class="cc-name">${esc(c.name)}</div>
+          <div class="cc-pronouns">${esc(c.pronouns) || '&nbsp;'}</div>
+          <div class="cc-roles">${rolesHtml}</div>
+        </div>
+      </div>`;
+    }
+
+    // ── SELECTS (role-based) ──
+    const collapsedRoles = new Set();
+    function selectsView() {
+      const pills = roles.map(r => `<span class="role-pill"><b>${esc(r.name)}</b> · ${esc(r.character || '')}</span>`).join('');
+      let html = `<div class="roles-bar">
+        <span class="roles-bar__label">Roles</span>
+        ${pills}
+        <button class="add-role-btn" onclick="addRole()">+ Add role</button>
+      </div>`;
+      if (!roles.length) return html + `<div class="cast-empty"><p>Add a role to start building selects.</p></div>`;
+      html += roles.map(roleSection).join('');
+      return html;
+    }
+    function roleSection(r) {
+      const members = cands
+        .filter(c => c.assignments && r.id in c.assignments)
+        .sort((a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name));
+      const collapsed = collapsedRoles.has(r.id);
+      const nSel = members.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
+      const rows = members.length
+        ? members.map(c => selRow(c, r.id)).join('')
+        : `<div class="role-empty">No one in contention yet — assign candidates from Cattle Call.</div>`;
+      return `<div class="role-sec ${collapsed?'collapsed':''}">
+        <div class="role-head" onclick="toggleRole('${r.id}')">
+          <span class="role-head__chev">▾</span>
+          <span class="role-head__name">${esc(r.name)}</span>
+          <span class="role-head__char">${esc(r.character || '')}</span>
+          <span class="role-head__count">${members.length} in contention${nSel?` · ${nSel} select`:''}</span>
+          ${nSel ? `<a class="role-present" onclick="event.stopPropagation();presentRole('${r.id}')">Present to client →</a>` : ''}
+        </div>
+        <div class="role-body">${rows}</div>
+      </div>`;
+    }
+    function selRow(c, roleId) {
+      const video = c.hasTape
+        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>Tape</span>`
+        : `<span class="vchip vchip--none">No tape</span>`;
+      return `<div class="sel-row" onclick="openDrawer('${c.id}')">
+        <img class="sel-thumb" src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
+        <div class="sel-main">
+          <div class="sel-name">${esc(c.name)}</div>
+          <div class="sel-sub">${esc(c.agency || '')} ${video}</div>
+        </div>
+        <div class="sel-status">${statusBadge(c.assignments[roleId])}</div>
+      </div>`;
+    }
+    function toggleRole(id) {
+      if (collapsedRoles.has(id)) collapsedRoles.delete(id); else collapsedRoles.add(id);
+      render();
+    }
+    async function addRole() {
+      const name = (prompt('Role name (e.g. LEAD, BARISTA):') || '').trim();
+      if (!name) return;
+      const character = (prompt('Character description (optional, e.g. "The Writer"):') || '').trim();
+      try {
+        const r = await api.send('POST', '/api/casting/roles', { job: JOB, name, character });
+        roles.push(r);
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert(e.message === 'role_exists' ? 'That role already exists.' : 'Could not add the role.');
+      }
+    }
+    function presentRole(id) {
+      const r = roleById(id);
+      alert(`Client presentation for "${r ? r.name : ''}" — the passive photo + name + tape review page — is the next slice to build (task 7).`);
+    }
+
+    // ── candidate drawer (shared by both tabs) ──
+    function openDrawer(id) {
+      const c = byId(id);
+      if (!c) return;
+      document.getElementById('drawer').innerHTML = drawerHtml(c);
+      document.getElementById('dr-back').classList.remove('hidden');
+    }
+    function closeDrawer(e) {
+      if (e && e.target !== document.getElementById('dr-back')) return;
+      document.getElementById('dr-back').classList.add('hidden');
+    }
+    function drawerHtml(c) {
+      const video = c.hasTape
+        ? `<span class="vchip" onclick="openVideo('${c.id}')"><span class="vchip__play">▶</span>Casting tape</span>`
+        : `<span class="vchip vchip--none">No tape submitted</span>`;
+      const asg = c.assignments || {};
+      const roleRows = roles.map(r => {
+        const on = r.id in asg;
+        const st = on ? asg[r.id] : '';
+        const opts = STATUS_KEYS.map(k => `<option value="${k}" ${st===k?'selected':''}>${STATUS[k].label}</option>`).join('');
+        return `<div class="rolerow">
+          <button class="role-toggle ${on?'on':''}" onclick="toggleAssign('${c.id}','${r.id}')">
+            <span class="role-toggle__box">${on?'✓':''}</span>
+            <span><b>${esc(r.name)}</b> · ${esc(r.character||'')}</span>
+          </button>
+          <select class="st-select" ${on?'':'disabled'} onchange="setStatus('${c.id}','${r.id}',this.value)">${opts}</select>
+        </div>`;
+      }).join('') || `<div class="role-empty">No roles defined yet — add one on the Selects tab.</div>`;
+
+      const av = c.avail || {};
+      const availHtml = ['travel','fitting','shoot'].map(k => {
+        const v = av[k]; if (!v) return '';
+        return `<span class="avail-tag ${v==='partial'?'partial':''}">${k[0].toUpperCase()+k.slice(1)}${v==='partial'?' (partial)':''}</span>`;
+      }).filter(Boolean).join('');
+
+      return `
+        <div class="dr-top">
+          <img class="dr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
+          <div class="dr-head">
+            <div style="display:flex;align-items:flex-start;">
+              <div style="flex:1;min-width:0;">
+                <div class="dr-name">${esc(c.name)}</div>
+                <div class="dr-pronouns">${esc(c.pronouns)||'&nbsp;'}</div>
+              </div>
+              <button class="dr-close" onclick="closeDrawer()">&times;</button>
+            </div>
+            ${video}
+          </div>
+        </div>
+
+        <div class="dr-sec">
+          <div class="dr-sec__label">Consider for</div>
+          ${roleRows}
+        </div>
+
+        <div class="dr-sec">
+          <div class="dr-sec__label">Details</div>
+          <div class="detail-grid">
+            <div class="d-item"><div class="d-label">Height</div><div class="d-val">${esc(c.height)||'—'}</div></div>
+            <div class="d-item"><div class="d-label">Weight</div><div class="d-val">${esc(c.weight)||'—'}</div></div>
+            <div class="d-item"><div class="d-label">Hair</div><div class="d-val">${esc(c.hair)||'—'}</div></div>
+            <div class="d-item"><div class="d-label">Eyes</div><div class="d-val">${esc(c.eyes)||'—'}</div></div>
+            <div class="d-item"><div class="d-label">Union</div><div class="d-val">${esc(c.union)||'—'}</div></div>
+            <div class="d-item d-full"><div class="d-label">Availability</div><div class="d-val avail-tags">${availHtml||'—'}</div></div>
+            ${c.note ? `<div class="d-item d-full"><div class="d-label">Note</div><div class="dr-note">${esc(c.note)}</div></div>` : ''}
+          </div>
+        </div>
+
+        <div class="dr-sec">
+          <div class="dr-sec__label">Contact &amp; agent</div>
+          <div class="detail-grid">
+            <div class="d-item"><div class="d-label">Actor</div><div class="d-val">
+              ${c.email?`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a><br>`:''}
+              ${c.phone?`<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`:''}</div></div>
+            <div class="d-item"><div class="d-label">Agent — ${esc(c.agency)||'—'}</div><div class="d-val">
+              ${esc(c.agent)||'—'}<br>
+              ${c.agentEmail?`<a href="mailto:${esc(c.agentEmail)}">${esc(c.agentEmail)}</a><br>`:''}
+              ${c.agentPhone?`<a href="tel:${esc(c.agentPhone)}">${esc(c.agentPhone)}</a>`:''}</div></div>
+          </div>
+        </div>`;
+    }
+
+    // role assignment mutations — persisted via the API, local state kept in sync
+    async function toggleAssign(id, roleId) {
+      const c = byId(id); if (!c) return;
+      c.assignments = c.assignments || {};
+      const on = roleId in c.assignments;
+      try {
+        if (on) { await api.send('DELETE', '/api/casting/assignments', { candidateId: id, roleId }); delete c.assignments[roleId]; }
+        else { const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId }); c.assignments[roleId] = (res && res.status) || 'shortlist'; }
+        openDrawer(id);
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert('Could not update the role assignment.');
+      }
+    }
+    async function setStatus(id, roleId, val) {
+      const c = byId(id); if (!c) return;
+      try {
+        const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId, status: val });
+        if (c.assignments && roleId in c.assignments) c.assignments[roleId] = (res && res.status) || val;
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert('Could not update the status.');
+      }
+    }
+
+    // ── video lightbox ──
+    function openVideo(id) {
+      const c = byId(id); if (!c) return;
+      const inner = document.getElementById('lb-inner');
+      // Real tape playback (presigned Wasabi) arrives with the media slice.
+      inner.innerHTML = `<div class="lb-frame"><div>▶</div><div>Casting tape wiring pending (Wasabi)</div></div><div class="lb-cap">${esc(c.name)} — casting tape</div>`;
+      document.getElementById('lightbox').classList.remove('hidden');
+    }
+    function closeVideo(e) {
+      if (e && e.target.tagName === 'VIDEO') return;
+      if (e && e.target.closest('.lb-inner') && !e.target.classList.contains('lb-close')) return;
+      const lb = document.getElementById('lightbox');
+      lb.classList.add('hidden');
+      lb.querySelector('video')?.pause();
+    }
+
+    // ── init ──
+    if (!JOB) {
+      document.getElementById('cast-body').innerHTML = `<div class="load-err">No job specified. Open casting for a job (…/casting.html?job=&lt;job&gt;).</div>`;
+    } else {
+      loadBoard();
+    }
+  </script>
+</body>
+</html>

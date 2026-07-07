@@ -1,0 +1,221 @@
+'use strict';
+// Casting data layer + REST API (producer-side, gated by auth). Tenant isolation
+// is the #1 rule: every query filters by tenant, and every child record is checked
+// to belong to the requesting tenant + its project before mutation.
+//
+// Shape returned to the front-end (see casting.html): a board =
+//   { project, roles:[{id,name,character,ord}],
+//     candidates:[{...fields, assignments:{ <roleId>: status }}] }
+const express = require('express');
+const db = require('./db');
+const { projectId, roleId, candidateId, assignmentId } = require('./ids');
+
+const router = express.Router();
+
+// requireAuth (mounted upstream) guarantees a resolved, active tenant.
+const eff = (req) => req.tenant.slug;
+
+const STATUSES = new Set(['shortlist', 'callback', 'recommend', 'backup', 'select', 'booked', 'pass']);
+
+// ── project resolution (one board per tenant+job) ────────────────────────────
+const qProject = db.prepare('SELECT * FROM casting_projects WHERE tenant = ? AND job = ?');
+function getOrCreateProject(tenant, job) {
+  let p = qProject.get(tenant, job);
+  if (!p) {
+    const id = projectId();
+    db.prepare('INSERT INTO casting_projects (id, tenant, job, title) VALUES (?, ?, ?, ?)')
+      .run(id, tenant, job, job);
+    p = db.prepare('SELECT * FROM casting_projects WHERE id = ?').get(id);
+  }
+  return p;
+}
+// Resolve a project the tenant already owns (no create) — for mutations by job.
+function ownedProject(tenant, job) {
+  return job ? qProject.get(tenant, job) : null;
+}
+
+// ── candidate row <-> API shape ──────────────────────────────────────────────
+function toCand(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    pronouns: row.pronouns || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    agency: row.agency || '',
+    agent: row.agent || '',
+    agentEmail: row.agent_email || '',
+    agentPhone: row.agent_phone || '',
+    height: row.height || '',
+    weight: row.weight || '',
+    hair: row.hair || '',
+    eyes: row.eyes || '',
+    union: row.union_status || '',
+    avail: { travel: row.avail_travel || '', fitting: row.avail_fitting || '', shoot: row.avail_shoot || '' },
+    note: row.note || '',
+    headshotKey: row.headshot_key || null,
+    tapeKey: row.tape_key || null,
+    hasTape: !!row.tape_key,
+    source: row.source || null,
+  };
+}
+
+// API body -> column map. Only keys present in `body` are returned (partial-safe).
+function fromBody(body) {
+  const out = {};
+  const set = (col, val) => { if (val !== undefined) out[col] = val === null ? null : String(val); };
+  set('name', body.name);
+  set('pronouns', body.pronouns);
+  set('email', body.email);
+  set('phone', body.phone);
+  set('agency', body.agency);
+  set('agent', body.agent);
+  set('agent_email', body.agentEmail);
+  set('agent_phone', body.agentPhone);
+  set('height', body.height);
+  set('weight', body.weight);
+  set('hair', body.hair);
+  set('eyes', body.eyes);
+  set('union_status', body.union);
+  if (body.avail !== undefined) {
+    set('avail_travel', body.avail?.travel ?? null);
+    set('avail_fitting', body.avail?.fitting ?? null);
+    set('avail_shoot', body.avail?.shoot ?? null);
+  }
+  set('note', body.note);
+  set('headshot_key', body.headshotKey);
+  set('tape_key', body.tapeKey);
+  set('source', body.source);
+  set('ext_ref', body.extRef);
+  return out;
+}
+
+// ── Board (get-or-create the project, return roles + candidates + assignments) ─
+router.get('/board', (req, res) => {
+  const t = eff(req);
+  const job = String(req.query.job || '').trim();
+  if (!job) return res.status(400).json({ error: 'job_required' });
+  const p = getOrCreateProject(t, job);
+  const roles = db.prepare('SELECT id, name, character, ord FROM casting_roles WHERE project_id = ? ORDER BY ord, created_at').all(p.id);
+  const cands = db.prepare('SELECT * FROM casting_candidates WHERE project_id = ? ORDER BY created_at').all(p.id);
+  const asg = db.prepare('SELECT candidate_id, role_id, status FROM casting_assignments WHERE project_id = ?').all(p.id);
+  const byCand = {};
+  for (const a of asg) (byCand[a.candidate_id] ||= {})[a.role_id] = a.status;
+  res.json({
+    project: { id: p.id, job: p.job, title: p.title },
+    roles,
+    candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {} })),
+  });
+});
+
+// ── Roles ────────────────────────────────────────────────────────────────────
+router.post('/roles', (req, res) => {
+  const t = eff(req);
+  const job = String(req.body?.job || '').trim();
+  const name = String(req.body?.name || '').trim();
+  if (!job || !name) return res.status(400).json({ error: 'job_and_name_required' });
+  const p = getOrCreateProject(t, job);
+  const dup = db.prepare('SELECT 1 FROM casting_roles WHERE project_id = ? AND lower(name) = lower(?)').get(p.id, name);
+  if (dup) return res.status(409).json({ error: 'role_exists' });
+  const character = String(req.body?.character || '').trim();
+  const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_roles WHERE project_id = ?').get(p.id).n;
+  const id = roleId();
+  db.prepare('INSERT INTO casting_roles (id, project_id, tenant, name, character, ord) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, p.id, t, name, character, ord);
+  res.status(201).json({ id, name, character, ord });
+});
+
+const qRole = db.prepare('SELECT * FROM casting_roles WHERE id = ? AND tenant = ?');
+router.put('/roles/:id', (req, res) => {
+  const row = qRole.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'role_not_found' });
+  const name = req.body?.name !== undefined ? String(req.body.name).trim() : row.name;
+  const character = req.body?.character !== undefined ? String(req.body.character).trim() : row.character;
+  const ord = req.body?.ord !== undefined ? Number(req.body.ord) : row.ord;
+  db.prepare('UPDATE casting_roles SET name = ?, character = ?, ord = ? WHERE id = ?')
+    .run(name, character, ord, row.id);
+  res.json({ id: row.id, name, character, ord });
+});
+
+router.delete('/roles/:id', (req, res) => {
+  const row = qRole.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'role_not_found' });
+  db.prepare('DELETE FROM casting_roles WHERE id = ?').run(row.id); // assignments cascade
+  res.status(204).end();
+});
+
+// ── Candidates ───────────────────────────────────────────────────────────────
+router.post('/candidates', (req, res) => {
+  const t = eff(req);
+  const job = String(req.body?.job || '').trim();
+  const name = String(req.body?.name || '').trim();
+  if (!job || !name) return res.status(400).json({ error: 'job_and_name_required' });
+  const p = getOrCreateProject(t, job);
+  const cols = fromBody(req.body);
+  cols.name = name;
+  const id = candidateId();
+  const keys = Object.keys(cols);
+  db.prepare(`INSERT INTO casting_candidates (id, project_id, tenant, ${keys.join(', ')})
+    VALUES (?, ?, ?, ${keys.map(() => '?').join(', ')})`)
+    .run(id, p.id, t, ...keys.map((k) => cols[k]));
+  res.status(201).json(toCand(db.prepare('SELECT * FROM casting_candidates WHERE id = ?').get(id)));
+});
+
+const qCand = db.prepare('SELECT * FROM casting_candidates WHERE id = ? AND tenant = ?');
+router.put('/candidates/:id', (req, res) => {
+  const row = qCand.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'candidate_not_found' });
+  const cols = fromBody(req.body);
+  delete cols.ext_ref; // identity/import key isn't hand-editable
+  const keys = Object.keys(cols);
+  if (keys.length) {
+    db.prepare(`UPDATE casting_candidates SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`)
+      .run(...keys.map((k) => cols[k]), row.id);
+  }
+  res.json(toCand(db.prepare('SELECT * FROM casting_candidates WHERE id = ?').get(row.id)));
+});
+
+router.delete('/candidates/:id', (req, res) => {
+  const row = qCand.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'candidate_not_found' });
+  db.prepare('DELETE FROM casting_candidates WHERE id = ?').run(row.id); // assignments cascade
+  res.status(204).end();
+});
+
+// ── Assignments (candidate x role + status) ──────────────────────────────────
+// Upsert: assign a candidate to a role and/or set the per-role status. Both the
+// candidate and the role must belong to the requesting tenant + the same project.
+router.put('/assignments', (req, res) => {
+  const t = eff(req);
+  const cid = String(req.body?.candidateId || '');
+  const rid = String(req.body?.roleId || '');
+  const cand = qCand.get(cid, t);
+  const role = qRole.get(rid, t);
+  if (!cand || !role) return res.status(404).json({ error: 'candidate_or_role_not_found' });
+  if (cand.project_id !== role.project_id) return res.status(400).json({ error: 'cross_project' });
+  const existing = db.prepare('SELECT id, status FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cid, rid);
+  const wanted = STATUSES.has(req.body?.status) ? req.body.status : null;
+  let status;
+  if (existing) {
+    status = wanted || existing.status;
+    db.prepare("UPDATE casting_assignments SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, existing.id);
+  } else {
+    status = wanted || 'shortlist';
+    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(rid).n;
+    db.prepare('INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(assignmentId(), cand.project_id, t, cid, rid, status, ord);
+  }
+  res.json({ ok: true, candidateId: cid, roleId: rid, status });
+});
+
+router.delete('/assignments', (req, res) => {
+  const t = eff(req);
+  const cid = String(req.body?.candidateId || '');
+  const rid = String(req.body?.roleId || '');
+  // Scope the delete to the tenant via the candidate (cheap + safe).
+  if (!qCand.get(cid, t)) return res.status(404).json({ error: 'candidate_not_found' });
+  db.prepare('DELETE FROM casting_assignments WHERE candidate_id = ? AND role_id = ? AND tenant = ?').run(cid, rid, t);
+  res.status(204).end();
+});
+
+module.exports = router;
