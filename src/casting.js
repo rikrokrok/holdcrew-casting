@@ -8,6 +8,7 @@
 //     candidates:[{...fields, assignments:{ <roleId>: status }}] }
 const express = require('express');
 const db = require('./db');
+const wasabi = require('./wasabi');
 const { projectId, roleId, candidateId, assignmentId } = require('./ids');
 
 const router = express.Router();
@@ -216,6 +217,68 @@ router.delete('/assignments', (req, res) => {
   if (!qCand.get(cid, t)) return res.status(404).json({ error: 'candidate_not_found' });
   db.prepare('DELETE FROM casting_assignments WHERE candidate_id = ? AND role_id = ? AND tenant = ?').run(cid, rid, t);
   res.status(204).end();
+});
+
+// ── Media (headshots / tapes) — 302 to a short-lived presigned Wasabi GET ────
+// Tenant-scoped: a key must live under the requesting tenant's prefix, so one
+// tenant can never presign another's media.
+router.get('/media', async (req, res) => {
+  const t = eff(req);
+  const key = String(req.query.key || '');
+  if (!key || !key.startsWith(t + '/')) return res.status(403).json({ error: 'forbidden' });
+  try {
+    const url = await wasabi.presignKey(key);
+    res.set('Cache-Control', 'no-store');
+    res.redirect(302, url);
+  } catch (e) {
+    res.status(502).json({ error: 'presign_failed' });
+  }
+});
+
+// ── Import (CSV/Fillout) — upsert candidates into the General Call pool ───────
+// Keyed on ext_ref (normalised name) so re-running an import (agency resubmits,
+// a second wave) updates existing candidates and adds new ones without dupes.
+// Empty incoming values never overwrite existing data (merge, not clobber).
+const normName = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+router.post('/import', (req, res) => {
+  const t = eff(req);
+  const job = String(req.body?.job || '').trim();
+  const rows = Array.isArray(req.body?.candidates) ? req.body.candidates : null;
+  if (!job || !rows) return res.status(400).json({ error: 'job_and_candidates_required' });
+  const p = getOrCreateProject(t, job);
+  const findByRef = db.prepare('SELECT id FROM casting_candidates WHERE project_id = ? AND ext_ref = ?');
+  let added = 0, updated = 0, skipped = 0;
+  const tx = db.transaction((list) => {
+    for (const raw of list) {
+      const name = String(raw?.name || '').trim();
+      if (!name) { skipped++; continue; }
+      const ref = normName(name);
+      const cols = fromBody(raw);
+      cols.name = name;
+      cols.source = raw.source || 'csv-import';
+      // Drop empty values so a blank CSV cell can't wipe existing data on re-import.
+      const clean = {};
+      for (const [k, v] of Object.entries(cols)) if (v !== undefined && v !== null && v !== '') clean[k] = v;
+      const existing = findByRef.get(p.id, ref);
+      if (existing) {
+        const keys = Object.keys(clean);
+        if (keys.length) {
+          db.prepare(`UPDATE casting_candidates SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`)
+            .run(...keys.map((k) => clean[k]), existing.id);
+        }
+        updated++;
+      } else {
+        clean.ext_ref = ref;
+        const keys = Object.keys(clean);
+        db.prepare(`INSERT INTO casting_candidates (id, project_id, tenant, ${keys.join(', ')})
+          VALUES (?, ?, ?, ${keys.map(() => '?').join(', ')})`)
+          .run(candidateId(), p.id, t, ...keys.map((k) => clean[k]));
+        added++;
+      }
+    }
+  });
+  tx(rows);
+  res.json({ ok: true, added, updated, skipped });
 });
 
 module.exports = router;

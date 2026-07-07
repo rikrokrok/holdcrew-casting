@@ -41,7 +41,7 @@
     .vchip--none { color: var(--muted); border-style: dashed; cursor: default; }
     .vchip--none:hover { border-color: var(--border); color: var(--muted); }
 
-    /* ── CATTLE CALL grid ── */
+    /* ── GENERAL CALL grid ── */
     .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
     .cc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; transition: border-color 0.12s, transform 0.08s; }
     .cc-card:hover { border-color: var(--subtle); }
@@ -139,6 +139,26 @@
     .cast-empty { text-align: center; padding: 3rem 1.5rem; }
     .cast-empty p { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); }
 
+    /* ── import ── */
+    .gc-actions { display: flex; justify-content: flex-end; margin-bottom: 0.9rem; }
+    .btn-import { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); background: none; border: 1px solid rgba(245,166,35,0.4); border-radius: var(--radius); padding: 7px 13px; cursor: pointer; }
+    .btn-import:hover { background: rgba(245,166,35,0.08); }
+    .import-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 100%; max-width: 560px; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1.4rem; }
+    .imp-title { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.04em; color: var(--amber); margin-bottom: 0.3rem; }
+    .imp-hint { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 0.5rem 0 1rem; line-height: 1.55; }
+    .imp-file { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+    .imp-map { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; margin-bottom: 1rem; }
+    .imp-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .imp-row label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .imp-row select { font-family: var(--font-mono); font-size: 11px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 7px; cursor: pointer; }
+    .imp-row select:focus { outline: none; border-color: var(--amber); }
+    .imp-preview { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); margin-bottom: 0.9rem; line-height: 1.5; }
+    .imp-err { font-family: var(--font-mono); font-size: 11px; color: var(--red); min-height: 15px; margin-bottom: 0.4rem; }
+    .imp-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
+    .btn-go { background: var(--amber); color: #000; border: none; border-radius: var(--radius); font-weight: 600; padding: 8px 18px; cursor: pointer; font-size: 13px; }
+    .btn-go:disabled { opacity: 0.45; cursor: default; }
+    .btn-cancel { background: none; border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 8px 16px; cursor: pointer; font-size: 13px; }
+
     @media (max-width: 600px) {
       .cc-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
       .dr-top { flex-direction: column; }
@@ -162,6 +182,27 @@
   <!-- candidate detail drawer -->
   <div class="modal-back hidden" id="dr-back" onclick="closeDrawer(event)">
     <div class="drawer" id="drawer" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- import CSV modal -->
+  <div class="modal-back hidden" id="imp-back" onclick="closeImport(event)">
+    <div class="import-box" onclick="event.stopPropagation()">
+      <div class="imp-title">Import candidates</div>
+      <div id="imp-step1">
+        <div class="imp-hint">Upload a casting director's CSV export (e.g. Fillout). You'll confirm which column feeds which field before anything is imported. Re-importing updates existing candidates by name — no duplicates.</div>
+        <input class="imp-file" type="file" id="imp-file" accept=".csv,text/csv" onchange="onImportFile(event)">
+      </div>
+      <div id="imp-step2" class="hidden">
+        <div class="imp-hint">Map the columns (auto-detected — adjust any that are wrong). Name is required.</div>
+        <div class="imp-map" id="imp-map"></div>
+        <div class="imp-preview" id="imp-preview"></div>
+        <div class="imp-err" id="imp-err"></div>
+        <div class="imp-actions">
+          <button class="btn-cancel" onclick="closeImport()">Cancel</button>
+          <button class="btn-go" id="imp-go" onclick="doImport()">Import</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- video lightbox -->
@@ -240,7 +281,7 @@
       }
     }
 
-    let activeTab = 'cattle';
+    let activeTab = 'general';
     function setTab(t) { activeTab = t; render(); }
 
     function render() {
@@ -248,18 +289,19 @@
       const assignedCount = cands.reduce((n, c) => n + (Object.keys(c.assignments || {}).length ? 1 : 0), 0);
       el.innerHTML = `
         <div class="tabs">
-          <button class="tab ${activeTab==='cattle'?'on':''}" onclick="setTab('cattle')">Cattle Call<span class="tab__n">${cands.length}</span></button>
+          <button class="tab ${activeTab==='general'?'on':''}" onclick="setTab('general')">General Call<span class="tab__n">${cands.length}</span></button>
           <button class="tab ${activeTab==='selects'?'on':''}" onclick="setTab('selects')">Selects<span class="tab__n">${assignedCount}</span></button>
         </div>
-        <div id="tab-body">${activeTab === 'cattle' ? cattleView() : selectsView()}</div>`;
+        <div id="tab-body">${activeTab === 'general' ? generalView() : selectsView()}</div>`;
     }
 
-    // ── CATTLE CALL ──
-    function cattleView() {
-      if (!cands.length) return `<div class="cast-empty"><p>No submissions yet. Import a casting director's export to get started.</p></div>`;
-      return `<div class="cc-grid">${cands.map(cattleCard).join('')}</div>`;
+    // ── GENERAL CALL ──
+    function generalView() {
+      const actions = `<div class="gc-actions"><button class="btn-import" onclick="openImport()">⇪ Import CSV</button></div>`;
+      if (!cands.length) return actions + `<div class="cast-empty"><p>No submissions yet. Import a casting director's export to get started.</p></div>`;
+      return actions + `<div class="cc-grid">${cands.map(generalCard).join('')}</div>`;
     }
-    function cattleCard(c) {
+    function generalCard(c) {
       const roleIds = Object.keys(c.assignments || {});
       const rolesHtml = roleIds.length
         ? roleIds.map(rid => { const r = roleById(rid); return `<span class="cc-rolechip">${esc(r ? r.name : '—')}</span>${statusBadge(c.assignments[rid])}`; }).join(' ')
@@ -301,7 +343,7 @@
       const nSel = members.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
       const rows = members.length
         ? members.map(c => selRow(c, r.id)).join('')
-        : `<div class="role-empty">No one in contention yet — assign candidates from Cattle Call.</div>`;
+        : `<div class="role-empty">No one in contention yet — assign candidates from General Call.</div>`;
       return `<div class="role-sec ${collapsed?'collapsed':''}">
         <div class="role-head" onclick="toggleRole('${r.id}')">
           <span class="role-head__chev">▾</span>
@@ -457,12 +499,127 @@
       }
     }
 
+    // ── CSV import ──────────────────────────────────────────────
+    // Target fields + a heuristic to auto-detect each from the CSV header row.
+    const IMPORT_FIELDS = [
+      { key:'name',       label:'Name *',       m: h => /name/.test(h) && !/agent|agency|role|char|user/.test(h) },
+      { key:'pronouns',   label:'Pronouns',     m: h => /pronoun/.test(h) },
+      { key:'email',      label:'Email',        m: h => /e-?mail/.test(h) && !/agent/.test(h) },
+      { key:'phone',      label:'Phone',        m: h => /(phone|mobile|cell)/.test(h) && !/agent/.test(h) },
+      { key:'agency',     label:'Agency',       m: h => /agency/.test(h) },
+      { key:'agent',      label:'Agent',        m: h => /agent/.test(h) && !/e-?mail|phone|mobile|cell|agency/.test(h) },
+      { key:'agentEmail', label:'Agent email',  m: h => /agent/.test(h) && /e-?mail/.test(h) },
+      { key:'agentPhone', label:'Agent phone',  m: h => /agent/.test(h) && /(phone|mobile|cell)/.test(h) },
+      { key:'height',     label:'Height',       m: h => /height/.test(h) },
+      { key:'weight',     label:'Weight',       m: h => /weight/.test(h) },
+      { key:'hair',       label:'Hair',         m: h => /hair/.test(h) },
+      { key:'eyes',       label:'Eyes',         m: h => /eye/.test(h) },
+      { key:'union',      label:'Union',        m: h => /union|actra|ubcp/.test(h) },
+      { key:'travel',     label:'Travel avail', m: h => /travel/.test(h) },
+      { key:'fitting',    label:'Fitting avail',m: h => /fitting/.test(h) },
+      { key:'shoot',      label:'Shoot avail',  m: h => /shoot/.test(h) },
+      { key:'note',       label:'Note',         m: h => /note|comment/.test(h) },
+    ];
+    let impHeaders = [], impRows = [], impMap = {};
+
+    // Minimal RFC-4180-ish CSV parser (quoted fields, escaped quotes, CRLF).
+    function parseCSV(text) {
+      const rows = []; let row = [], field = '', inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQ) {
+          if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQ = false; }
+          else field += c;
+        } else if (c === '"') inQ = true;
+        else if (c === ',') { row.push(field); field = ''; }
+        else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+        else if (c !== '\r') field += c;
+      }
+      if (field.length || row.length) { row.push(field); rows.push(row); }
+      return rows.filter(r => r.some(x => (x || '').trim() !== ''));
+    }
+
+    function openImport() {
+      document.getElementById('imp-step1').classList.remove('hidden');
+      document.getElementById('imp-step2').classList.add('hidden');
+      document.getElementById('imp-file').value = '';
+      document.getElementById('imp-err').textContent = '';
+      document.getElementById('imp-back').classList.remove('hidden');
+    }
+    function closeImport(e) {
+      if (e && e.target !== document.getElementById('imp-back')) return;
+      document.getElementById('imp-back').classList.add('hidden');
+    }
+    function onImportFile(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const rows = parseCSV(reader.result);
+        if (rows.length < 2) { document.getElementById('imp-err').textContent = 'That CSV has no data rows.'; return; }
+        impHeaders = rows[0].map(h => (h || '').trim());
+        impRows = rows.slice(1);
+        impMap = {};
+        for (const f of IMPORT_FIELDS) impMap[f.key] = impHeaders.findIndex(h => f.m(h.toLowerCase()));
+        renderMapping();
+        document.getElementById('imp-step1').classList.add('hidden');
+        document.getElementById('imp-step2').classList.remove('hidden');
+      };
+      reader.readAsText(file);
+    }
+    function renderMapping() {
+      const opts = sel => `<option value="-1">— none —</option>` +
+        impHeaders.map((h, i) => `<option value="${i}" ${i===sel?'selected':''}>${esc(h)}</option>`).join('');
+      document.getElementById('imp-map').innerHTML = IMPORT_FIELDS.map(f => `
+        <div class="imp-row"><label>${esc(f.label)}</label>
+          <select onchange="impMap['${f.key}']=+this.value;updateImpPreview()">${opts(impMap[f.key])}</select>
+        </div>`).join('');
+      updateImpPreview();
+    }
+    function updateImpPreview() {
+      const ni = impMap['name'];
+      const el = document.getElementById('imp-preview');
+      const go = document.getElementById('imp-go');
+      if (ni < 0) { el.textContent = 'Map a Name column to continue.'; go.disabled = true; return; }
+      const names = impRows.map(r => (r[ni] || '').trim()).filter(Boolean);
+      go.disabled = names.length === 0;
+      el.textContent = names.length
+        ? `${names.length} candidate${names.length===1?'':'s'} ready — e.g. ${names.slice(0,3).join(', ')}${names.length>3?'…':''}`
+        : 'No named rows found.';
+    }
+    async function doImport() {
+      const ni = impMap['name']; if (ni < 0) return;
+      const cell = (r, key) => { const i = impMap[key]; return i >= 0 ? (r[i] || '').trim() : ''; };
+      const candidates = impRows.map(r => {
+        const name = (r[ni] || '').trim(); if (!name) return null;
+        return {
+          name, pronouns: cell(r,'pronouns'), email: cell(r,'email'), phone: cell(r,'phone'),
+          agency: cell(r,'agency'), agent: cell(r,'agent'), agentEmail: cell(r,'agentEmail'), agentPhone: cell(r,'agentPhone'),
+          height: cell(r,'height'), weight: cell(r,'weight'), hair: cell(r,'hair'), eyes: cell(r,'eyes'), union: cell(r,'union'),
+          avail: { travel: cell(r,'travel'), fitting: cell(r,'fitting'), shoot: cell(r,'shoot') },
+          note: cell(r,'note'), source: 'csv-import',
+        };
+      }).filter(Boolean);
+      const go = document.getElementById('imp-go');
+      go.disabled = true; go.textContent = 'Importing…';
+      try {
+        const res = await api.send('POST', '/api/casting/import', { job: JOB, candidates });
+        document.getElementById('imp-back').classList.add('hidden');
+        await loadBoard();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        document.getElementById('imp-err').textContent = 'Import failed — try again.';
+        go.disabled = false; go.textContent = 'Import';
+      }
+    }
+
     // ── video lightbox ──
     function openVideo(id) {
       const c = byId(id); if (!c) return;
       const inner = document.getElementById('lb-inner');
-      // Real tape playback (presigned Wasabi) arrives with the media slice.
-      inner.innerHTML = `<div class="lb-frame"><div>▶</div><div>Casting tape wiring pending (Wasabi)</div></div><div class="lb-cap">${esc(c.name)} — casting tape</div>`;
+      const frame = c.tapeKey
+        ? `<video controls autoplay playsinline src="/api/casting/media?key=${encodeURIComponent(c.tapeKey)}"></video>`
+        : `<div class="lb-frame"><div>▶</div><div>No casting tape uploaded yet</div></div>`;
+      inner.innerHTML = `${c.tapeKey ? `<div class="lb-frame">${frame}</div>` : frame}<div class="lb-cap">${esc(c.name)} — casting tape</div>`;
       document.getElementById('lightbox').classList.remove('hidden');
     }
     function closeVideo(e) {
