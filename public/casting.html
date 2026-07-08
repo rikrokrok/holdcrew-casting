@@ -31,6 +31,7 @@
     .badge--backup    { color: var(--amber-dim); background: rgba(196,127,0,0.08); border-color: rgba(196,127,0,0.3); }
     .badge--callback  { color: #6fa8dc; background: rgba(111,168,220,0.1); border-color: rgba(111,168,220,0.32); }
     .badge--shortlist { color: var(--subtle); background: none; border-color: var(--border); }
+    .badge--submitted { color: var(--muted); background: none; border-color: var(--dim); }
     .badge--pass      { color: var(--red); background: rgba(224,92,92,0.06); border-color: rgba(224,92,92,0.22); }
     .badge--unassigned{ color: var(--muted); background: none; border-color: var(--dim); }
 
@@ -53,15 +54,14 @@
     .cc-body { padding: 10px 12px 12px; }
     .cc-name { font-size: 15px; color: var(--text); font-weight: 500; line-height: 1.2; }
     .cc-pronouns { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 1px; min-height: 12px; }
-    .cc-roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; align-items: center; }
-    .cc-roleitem { display: inline-flex; align-items: center; gap: 3px; }
-    /* inline role toggle — assign/unassign straight from the card, no drawer */
-    .cc-rt { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--subtle); background: none; cursor: pointer; white-space: nowrap; }
-    .cc-rt:hover { border-color: var(--amber); color: var(--amber); }
-    .cc-rt.on { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 600; }
-    .cc-rt.on.book { background: var(--green); border-color: var(--green); }
+    /* role picker + one-tap shortlist, straight on the card (no drawer) */
+    .cc-roles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+    .cc-rolesel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 6px; cursor: pointer; max-width: 58%; }
+    .cc-rolesel:hover { border-color: var(--subtle); }
+    .cc-rolesel:focus { outline: none; border-color: var(--amber); }
+    .cc-sl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #000; background: var(--amber); border: 1px solid var(--amber); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-weight: 600; }
+    .cc-sl:hover { background: #e09520; }
     .cc-noroles { font-family: var(--font-mono); font-size: 9px; color: var(--muted); font-style: italic; }
-    .cc-rolechip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; color: var(--subtle); }
 
     /* ── SELECTS (role-based) ── */
     .roles-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.1rem; }
@@ -242,9 +242,14 @@
       backup:    { label: 'Backup',    order: 3 },
       callback:  { label: 'Callback',  order: 4 },
       shortlist: { label: 'Shortlist', order: 5 },
-      pass:      { label: 'Pass',      order: 6 },
+      submitted: { label: 'Submitted', order: 6 },
+      pass:      { label: 'Pass',      order: 7 },
     };
-    const STATUS_KEYS = ['shortlist','callback','recommend','backup','select','booked','pass'];
+    const STATUS_KEYS = ['submitted','shortlist','callback','recommend','backup','select','booked','pass'];
+    // 'submitted' = assigned to a role but not yet shortlisted; lives in General
+    // Call only. Everything shortlisted+ (incl. Pass, as a decision record) shows
+    // on the Selects board.
+    const onSelects = st => !!st && st !== 'submitted';
     function statusBadge(code) {
       const m = STATUS[code] || STATUS.shortlist;
       return `<span class="badge badge--${code}">${esc(m.label)}</span>`;
@@ -302,7 +307,7 @@
 
     function render() {
       const el = document.getElementById('cast-body');
-      const assignedCount = cands.reduce((n, c) => n + (Object.keys(c.assignments || {}).length ? 1 : 0), 0);
+      const assignedCount = cands.reduce((n, c) => n + (Object.values(c.assignments || {}).some(onSelects) ? 1 : 0), 0);
       el.innerHTML = `
         <div class="tabs">
           <button class="tab ${activeTab==='general'?'on':''}" onclick="setTab('general')">General Call<span class="tab__n">${cands.length}</span></button>
@@ -317,20 +322,31 @@
       if (!cands.length) return actions + `<div class="cast-empty"><p>No submissions yet. Import a casting director's export to get started.</p></div>`;
       return actions + `<div class="cc-grid">${cands.map(generalCard).join('')}</div>`;
     }
+    // An actor is normally in for ONE role (preassigned from the CSV's Role column
+    // or set here). primaryAssignment = that role + its status.
+    function primaryAssignment(c) {
+      const ks = Object.keys(c.assignments || {});
+      if (!ks.length) return null;
+      return { roleId: ks[0], status: c.assignments[ks[0]] };
+    }
     function generalCard(c) {
-      const asg = c.assignments || {};
-      // Inline role toggles — one per defined role; tap to assign/unassign right
-      // here (no drawer). When assigned, the status badge shows how far along.
-      const rolesHtml = roles.length
-        ? roles.map(r => {
-            const on = r.id in asg;
-            const st = on ? asg[r.id] : '';
-            return `<span class="cc-roleitem">
-              <button class="cc-rt${on ? ' on' : ''}${st==='booked' ? ' book' : ''}" onclick="event.stopPropagation();quickToggleRole('${c.id}','${r.id}')">${esc(r.name)}</button>
-              ${on && st !== 'shortlist' ? statusBadge(st) : ''}
-            </span>`;
-          }).join('')
-        : `<span class="cc-noroles">Add roles on the Selects tab to assign</span>`;
+      const pr = primaryAssignment(c);
+      // Role picker (assign / change / clear) + a one-tap Shortlist. No drawer.
+      let roleCtrl;
+      if (!roles.length) {
+        roleCtrl = `<span class="cc-noroles">Add a role on the Selects tab first</span>`;
+      } else {
+        const sel = `<select class="cc-rolesel" onclick="event.stopPropagation()" onchange="event.stopPropagation();assignRole('${c.id}', this.value)">
+            <option value="">— role —</option>
+            ${roles.map(r => `<option value="${r.id}" ${pr && pr.roleId === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+          </select>`;
+        const action = pr
+          ? (pr.status === 'submitted'
+              ? `<button class="cc-sl" onclick="event.stopPropagation();shortlist('${c.id}')">Shortlist</button>`
+              : statusBadge(pr.status))
+          : '';
+        roleCtrl = sel + action;
+      }
       const nt = (c.tapes || []).length;
       const video = nt
         ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' tapes' : 'Tape'}</span>`
@@ -344,24 +360,42 @@
         <div class="cc-body">
           <div class="cc-name">${esc(c.name)}</div>
           <div class="cc-pronouns">${esc(c.pronouns) || '&nbsp;'}</div>
-          <div class="cc-roles">${rolesHtml}</div>
+          <div class="cc-roles">${roleCtrl}</div>
         </div>
       </div>`;
     }
 
-    // Assign/unassign a candidate to a role straight from a General Call card.
-    // No drawer — optimistic local update, then re-render both tabs.
-    async function quickToggleRole(id, roleId) {
+    // Assign / change / clear an actor's role from the card (keeps their status
+    // when moving roles; new assignment lands at 'submitted').
+    async function assignRole(id, roleId) {
       const c = byId(id); if (!c) return;
       c.assignments = c.assignments || {};
-      const on = roleId in c.assignments;
+      const cur = primaryAssignment(c);
+      if (cur && cur.roleId === roleId) return;
       try {
-        if (on) { await api.send('DELETE', '/api/casting/assignments', { candidateId: id, roleId }); delete c.assignments[roleId]; }
-        else { const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId }); c.assignments[roleId] = (res && res.status) || 'shortlist'; }
+        if (cur) { await api.send('DELETE', '/api/casting/assignments', { candidateId: id, roleId: cur.roleId }); delete c.assignments[cur.roleId]; }
+        if (roleId) {
+          const status = cur ? cur.status : 'submitted';
+          const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId, status });
+          c.assignments[roleId] = (res && res.status) || status;
+        }
         render();
       } catch (e) {
         if (e.message === 'auth') return;
         alert('Could not update the role.');
+      }
+    }
+    // One-tap: promote an actor from 'submitted' onto the Selects board.
+    async function shortlist(id) {
+      const c = byId(id); if (!c) return;
+      const cur = primaryAssignment(c); if (!cur) return;
+      try {
+        const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId: cur.roleId, status: 'shortlist' });
+        c.assignments[cur.roleId] = (res && res.status) || 'shortlist';
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert('Could not shortlist.');
       }
     }
 
@@ -379,14 +413,16 @@
       return html;
     }
     function roleSection(r) {
+      // Selects board = shortlisted+ (candidates still at 'submitted' stay in the
+      // General Call until they're shortlisted).
       const members = cands
-        .filter(c => c.assignments && r.id in c.assignments)
+        .filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]))
         .sort((a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name));
       const collapsed = collapsedRoles.has(r.id);
       const nSel = members.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
       const rows = members.length
         ? members.map(c => selRow(c, r.id)).join('')
-        : `<div class="role-empty">No one in contention yet — assign candidates from General Call.</div>`;
+        : `<div class="role-empty">No one shortlisted yet — shortlist actors from the General Call.</div>`;
       return `<div class="role-sec ${collapsed?'collapsed':''}">
         <div class="role-head" onclick="toggleRole('${r.id}')">
           <span class="role-head__chev">▾</span>
@@ -566,6 +602,7 @@
     const IMPORT_FIELDS = [
       { key:'name',       label:'Name *',       m: h => /name/.test(h) && !/agent|agency|role|char|user/.test(h) },
       { key:'number',     label:'Number',       m: h => /number|slate|cast.*no|^#$|^no\.?$/.test(h) },
+      { key:'role',       label:'Role',         m: h => /^role$|character|casting role|part\b/.test(h) },
       { key:'pronouns',   label:'Pronouns',     m: h => /pronoun/.test(h) },
       { key:'email',      label:'Email',        m: h => /e-?mail/.test(h) && !/agent/.test(h) },
       { key:'phone',      label:'Phone',        m: h => /(phone|mobile|cell)/.test(h) && !/agent/.test(h) },
@@ -655,7 +692,7 @@
       const candidates = impRows.map(r => {
         const name = (r[ni] || '').trim(); if (!name) return null;
         return {
-          name, number: cell(r,'number'), pronouns: cell(r,'pronouns'), email: cell(r,'email'), phone: cell(r,'phone'),
+          name, number: cell(r,'number'), role: cell(r,'role'), pronouns: cell(r,'pronouns'), email: cell(r,'email'), phone: cell(r,'phone'),
           agency: cell(r,'agency'), agent: cell(r,'agent'), agentEmail: cell(r,'agentEmail'), agentPhone: cell(r,'agentPhone'),
           height: cell(r,'height'), weight: cell(r,'weight'), hair: cell(r,'hair'), eyes: cell(r,'eyes'), union: cell(r,'union'),
           avail: { travel: cell(r,'travel'), fitting: cell(r,'fitting'), shoot: cell(r,'shoot') },

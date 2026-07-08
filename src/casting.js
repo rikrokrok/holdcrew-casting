@@ -16,7 +16,10 @@ const router = express.Router();
 // requireAuth (mounted upstream) guarantees a resolved, active tenant.
 const eff = (req) => req.tenant.slug;
 
-const STATUSES = new Set(['shortlist', 'callback', 'recommend', 'backup', 'select', 'booked', 'pass']);
+// 'submitted' = assigned to a role (in the General Call) but not yet shortlisted;
+// it's the base an actor lands at when their role is known (CSV/import or the
+// card's role picker). Shortlisting promotes them onto the Selects board.
+const STATUSES = new Set(['submitted', 'shortlist', 'callback', 'recommend', 'backup', 'select', 'booked', 'pass']);
 
 // ── project resolution (one board per tenant+job) ────────────────────────────
 const qProject = db.prepare('SELECT * FROM casting_projects WHERE tenant = ? AND job = ?');
@@ -33,6 +36,20 @@ function getOrCreateProject(tenant, job) {
 // Resolve a project the tenant already owns (no create) — for mutations by job.
 function ownedProject(tenant, job) {
   return job ? qProject.get(tenant, job) : null;
+}
+
+// Find or create a role by name within a project (used by CSV import so roles
+// come from the data). Case-insensitive match.
+function getOrCreateRole(projectId, tenant, name) {
+  let r = db.prepare('SELECT * FROM casting_roles WHERE project_id = ? AND lower(name) = lower(?)').get(projectId, name);
+  if (!r) {
+    const id = roleId();
+    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_roles WHERE project_id = ?').get(projectId).n;
+    db.prepare('INSERT INTO casting_roles (id, project_id, tenant, name, character, ord) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(id, projectId, tenant, name, '', ord);
+    r = db.prepare('SELECT * FROM casting_roles WHERE id = ?').get(id);
+  }
+  return r;
 }
 
 // ── candidate row <-> API shape ──────────────────────────────────────────────
@@ -275,6 +292,7 @@ router.post('/import', (req, res) => {
   const p = getOrCreateProject(t, job);
   const findByRef = db.prepare('SELECT id FROM casting_candidates WHERE project_id = ? AND ext_ref = ?');
   let added = 0, updated = 0, skipped = 0;
+  const findAsg = db.prepare('SELECT id FROM casting_assignments WHERE candidate_id = ? AND role_id = ?');
   const tx = db.transaction((list) => {
     for (const raw of list) {
       const name = String(raw?.name || '').trim();
@@ -287,7 +305,9 @@ router.post('/import', (req, res) => {
       const clean = {};
       for (const [k, v] of Object.entries(cols)) if (v !== undefined && v !== null && v !== '') clean[k] = v;
       const existing = findByRef.get(p.id, ref);
+      let cid;
       if (existing) {
+        cid = existing.id;
         const keys = Object.keys(clean);
         if (keys.length) {
           db.prepare(`UPDATE casting_candidates SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`)
@@ -295,12 +315,24 @@ router.post('/import', (req, res) => {
         }
         updated++;
       } else {
+        cid = candidateId();
         clean.ext_ref = ref;
         const keys = Object.keys(clean);
         db.prepare(`INSERT INTO casting_candidates (id, project_id, tenant, ${keys.join(', ')})
           VALUES (?, ?, ?, ${keys.map(() => '?').join(', ')})`)
-          .run(candidateId(), p.id, t, ...keys.map((k) => clean[k]));
+          .run(cid, p.id, t, ...keys.map((k) => clean[k]));
         added++;
+      }
+      // Preassigned role from the CSV — put them "in" for that role at 'submitted'
+      // (create the role if new; never downgrade an existing assignment's status).
+      const roleName = String(raw?.role || '').trim();
+      if (roleName) {
+        const role = getOrCreateRole(p.id, t, roleName);
+        if (!findAsg.get(cid, role.id)) {
+          const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(role.id).n;
+          db.prepare('INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(assignmentId(), p.id, t, cid, role.id, 'submitted', ord);
+        }
       }
     }
   });
