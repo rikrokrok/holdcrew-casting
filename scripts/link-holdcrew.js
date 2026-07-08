@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 'use strict';
-// Link a casting tenant to its HoldCrew company so Book can promote candidates
-// into that company's Job Log (via the v3-talent-save webhook, which authenticates
-// with the company's registry token). Reads the token from the HoldCrew company
+// Link a casting tenant to its HoldCrew company so Hold/Book can promote
+// candidates into that company's Job Log (via the v3-talent-save webhook, which
+// authenticates with the company's registry token). ONE slug — the casting tenant
+// slug IS the HoldCrew company slug. Reads the token from the HoldCrew company
 // registry through the util-sheet-write `get` op and stores it on the tenant.
 // Re-run any time the company's token rotates.
 //
-//   node scripts/link-holdcrew.js <castingSlug> [hcSlug=castingSlug]
+//   node scripts/link-holdcrew.js <slug>
 //
 // The token is never printed. Run on the droplet (needs the local util webhook).
 const fs = require('fs');
@@ -17,16 +18,16 @@ const REGISTRY_SHEET = '13kcNKAi4GhUTfVioay2MgRspD6ZlxSw4jSlm7MNw3i4';
 const UTIL_URL = 'http://127.0.0.1:5678/webhook/util-sheet-write';
 const UTIL_TOKEN_FILE = '/root/.holdcrew_util_token';
 
-const [, , castingSlug, hcSlugArg] = process.argv;
-if (!castingSlug) {
-  console.error('usage: node scripts/link-holdcrew.js <castingSlug> [hcSlug=castingSlug]');
+const [, , slug] = process.argv;
+if (!slug) {
+  console.error('usage: node scripts/link-holdcrew.js <slug>');
   process.exit(1);
 }
-const hcSlug = (hcSlugArg || castingSlug).trim().toLowerCase();
+const hcSlug = slug.trim().toLowerCase();
 
-const tenant = db.prepare('SELECT slug FROM tenants WHERE slug = ?').get(castingSlug);
+const tenant = db.prepare('SELECT slug FROM tenants WHERE slug = ?').get(slug);
 if (!tenant) {
-  console.error(`no casting tenant '${castingSlug}' — onboard it first (scripts/onboard-tenant.js).`);
+  console.error(`no casting tenant '${slug}' — onboard it first (scripts/onboard-tenant.js).`);
   process.exit(1);
 }
 
@@ -56,7 +57,7 @@ function postJson(url, body) {
   if (!token) throw new Error(`HoldCrew company '${hcSlug}' has no token in the registry.`);
   if ((match[iActive] || '').trim().toLowerCase() !== 'yes') console.warn(`  ⚠ company '${hcSlug}' is not marked active in the registry.`);
 
-  db.prepare('UPDATE tenants SET hc_slug = ?, hc_token = ? WHERE slug = ?').run(hcSlug, token, castingSlug);
-  console.log(`linked casting '${castingSlug}' → HoldCrew company '${hcSlug}' (${(match[iName] || '').trim()}). Book will now promote to that Job Log.`);
+  db.prepare('UPDATE tenants SET hc_token = ? WHERE slug = ?').run(token, slug);
+  console.log(`linked '${slug}' → HoldCrew company '${hcSlug}' (${(match[iName] || '').trim()}). Hold/Book will now promote to that Job Log.`);
   process.exit(0);
 })().catch((e) => { console.error('\n' + e.message); process.exit(1); });

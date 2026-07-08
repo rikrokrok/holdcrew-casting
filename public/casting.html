@@ -26,6 +26,7 @@
     /* ── shared: photo + video + status ── */
     .badge { display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; border: 1px solid transparent; white-space: nowrap; }
     .badge--booked    { color: #000; background: var(--green); border-color: var(--green); font-weight: 600; }
+    .badge--hold      { color: #000; background: #5bbfb5; border-color: #5bbfb5; font-weight: 600; }
     .badge--select    { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 600; }
     .badge--recommend { color: var(--amber); background: rgba(245,166,35,0.12); border-color: rgba(245,166,35,0.4); }
     .badge--backup    { color: var(--amber-dim); background: rgba(196,127,0,0.08); border-color: rgba(196,127,0,0.3); }
@@ -127,10 +128,14 @@
     .st-select { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; cursor: pointer; }
     .st-select:focus { outline: none; border-color: var(--amber); }
     .st-select:disabled { opacity: 0.3; }
-    /* Book / booked (drawer role rows) */
-    .rr-book { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: #000; background: var(--green); border: 1px solid var(--green); border-radius: var(--radius); padding: 5px 11px; cursor: pointer; flex-shrink: 0; }
-    .rr-book:hover { filter: brightness(1.1); }
-    .rr-booked { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--green); background: none; border: 1px solid var(--green); border-radius: var(--radius); padding: 5px 9px; white-space: nowrap; }
+    /* Hold / Book + held/booked pills (drawer role rows) */
+    .rr-hold, .rr-book { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: #000; border-radius: var(--radius); padding: 5px 11px; cursor: pointer; flex-shrink: 0; }
+    .rr-hold { background: #5bbfb5; border: 1px solid #5bbfb5; }
+    .rr-book { background: var(--green); border: 1px solid var(--green); }
+    .rr-hold:hover, .rr-book:hover { filter: brightness(1.1); }
+    .rr-held, .rr-booked { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; background: none; border-radius: var(--radius); padding: 5px 9px; white-space: nowrap; }
+    .rr-held { color: #5bbfb5; border: 1px solid #5bbfb5; }
+    .rr-booked { color: var(--green); border: 1px solid var(--green); }
     .rr-unbook { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 3px; flex-shrink: 0; }
     .rr-unbook:hover { color: var(--red); }
     /* transient toast */
@@ -249,15 +254,16 @@
     // Casting-Director concern, deliberately out of scope here. order = best-first.
     const STATUS = {
       booked:    { label: 'Booked',    order: 0 },
-      select:    { label: 'Select',    order: 1 },
-      recommend: { label: 'Recommend', order: 2 },
-      backup:    { label: 'Backup',    order: 3 },
-      callback:  { label: 'Callback',  order: 4 },
-      shortlist: { label: 'Shortlist', order: 5 },
-      submitted: { label: 'Submitted', order: 6 },
-      pass:      { label: 'Pass',      order: 7 },
+      hold:      { label: 'Hold',      order: 1 },
+      select:    { label: 'Select',    order: 2 },
+      recommend: { label: 'Recommend', order: 3 },
+      backup:    { label: 'Backup',    order: 4 },
+      callback:  { label: 'Callback',  order: 5 },
+      shortlist: { label: 'Shortlist', order: 6 },
+      submitted: { label: 'Submitted', order: 7 },
+      pass:      { label: 'Pass',      order: 8 },
     };
-    const STATUS_KEYS = ['submitted','shortlist','callback','recommend','backup','select','booked','pass'];
+    const STATUS_KEYS = ['submitted','shortlist','callback','recommend','backup','select','hold','booked','pass'];
     // 'submitted' = assigned to a role but not yet shortlisted; lives in General
     // Call only. Everything shortlisted+ (incl. Pass, as a decision record) shows
     // on the Selects board.
@@ -498,18 +504,23 @@
       const roleRows = roles.map(r => {
         const on = r.id in asg;
         const st = on ? asg[r.id] : '';
-        const booked = st === 'booked';
-        // 'booked' is reachable only via Book (which also writes the Job Log), so
-        // it's never a manual dropdown choice — keeps booked ⟺ promoted.
-        const opts = STATUS_KEYS.filter(k => k !== 'booked')
+        // Hold + Book are commitments that write the Job Log, so they're reachable
+        // only via their buttons — never manual dropdown choices (keeps held ⟺
+        // pending-in-Job-Log and booked ⟺ confirmed-in-Job-Log).
+        const opts = STATUS_KEYS.filter(k => k !== 'hold' && k !== 'booked')
           .map(k => `<option value="${k}" ${st===k?'selected':''}>${STATUS[k].label}</option>`).join('');
         let ctrl;
-        if (booked) {
+        if (st === 'booked') {
           ctrl = `<span class="rr-booked" title="Written to the HoldCrew Job Log as confirmed Talent">✓ Booked · Job Log</span>
-            <button class="rr-unbook" title="Undo booking here (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
+            <button class="rr-unbook" title="Undo (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
+        } else if (st === 'hold') {
+          ctrl = `<span class="rr-held" title="Written to the HoldCrew Job Log as pending (held) Talent">◷ Held · Job Log</span>
+            <button class="rr-book" title="Confirm the hold → Book" onclick="bookRole('${c.id}','${r.id}')">Book</button>
+            <button class="rr-unbook" title="Undo (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
         } else {
           ctrl = `<select class="st-select" ${on?'':'disabled'} onchange="setStatus('${c.id}','${r.id}',this.value)">${opts}</select>` +
-            (on ? `<button class="rr-book" onclick="bookRole('${c.id}','${r.id}')">Book</button>` : '');
+            (on ? `<button class="rr-hold" onclick="holdRole('${c.id}','${r.id}')">Hold</button>
+                   <button class="rr-book" onclick="bookRole('${c.id}','${r.id}')">Book</button>` : '');
         }
         return `<div class="rolerow">
           <button class="role-toggle ${on?'on':''}" onclick="toggleAssign('${c.id}','${r.id}')">
@@ -606,25 +617,33 @@
       }
     }
 
-    // Book an actor into a role → writes them to the HoldCrew Job Log as confirmed
-    // Talent (the single cross-system write; see src/holdcrew.js). Idempotent on
-    // the HoldCrew side (upsert by name+job).
-    async function bookRole(id, roleId) {
+    // Hold / Book — the two commitments that write the HoldCrew Job Log (Hold =
+    // pending Talent row, Book = confirmed Talent → syncs to the call sheet). The
+    // single cross-system write; see src/holdcrew.js. Idempotent on the HoldCrew
+    // side (upsert by name+job), so Hold → Book just flips the row to Confirmed.
+    const COMMIT = {
+      hold: { path: 'hold', status: 'hold',   verb: 'Hold', done: 'Held',   note: 'as pending (held) Talent' },
+      book: { path: 'book', status: 'booked', verb: 'Book', done: 'Booked', note: 'as confirmed Talent' },
+    };
+    async function commitRole(id, roleId, action) {
       const c = byId(id); if (!c) return;
       const r = roleById(roleId);
-      if (!confirm(`Book ${c.name}${r ? ' as ' + r.name : ''}?\n\nThis adds them to this job's HoldCrew Job Log as confirmed Talent.`)) return;
+      const m = COMMIT[action];
+      if (!confirm(`${m.verb} ${c.name}${r ? ' as ' + r.name : ''}?\n\nThis adds them to this job's HoldCrew Job Log ${m.note}.`)) return;
       try {
-        const res = await api.send('POST', `/api/casting/candidates/${id}/book`, { roleId });
+        const res = await api.send('POST', `/api/casting/candidates/${id}/${m.path}`, { roleId });
         c.assignments = c.assignments || {};
-        c.assignments[roleId] = 'booked';
+        c.assignments[roleId] = m.status;
         openDrawer(id); render();
-        if (res && res.promoted) toast('Booked — added to the Job Log.');
-        else toast(`Booked here, but the Job Log write failed${res && res.error ? ' (' + res.error + ')' : ''}. Retry Book.`, true);
+        if (res && res.promoted) toast(`${m.done} — added to the Job Log.`);
+        else toast(`${m.done} here, but the Job Log write failed${res && res.error ? ' (' + res.error + ')' : ''}. Retry.`, true);
       } catch (e) {
         if (e.message === 'auth') return;
-        toast('Could not book: ' + e.message, true);
+        toast(`Could not ${m.verb.toLowerCase()}: ` + e.message, true);
       }
     }
+    const holdRole = (id, roleId) => commitRole(id, roleId, 'hold');
+    const bookRole = (id, roleId) => commitRole(id, roleId, 'book');
 
     // transient toast (bottom-center)
     let toastTimer;

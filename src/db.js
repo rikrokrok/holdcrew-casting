@@ -124,18 +124,21 @@ if (!db.prepare('PRAGMA table_info(casting_candidates)').all().some((c) => c.nam
   db.exec('ALTER TABLE casting_candidates ADD COLUMN number TEXT');
 }
 
-// HoldCrew linkage: a Booked candidate is promoted into that company's HoldCrew
-// Job Log via the v3-talent-save webhook, which authenticates with the company's
-// registry slug + token. The casting tenant slug and the HoldCrew company slug
-// can differ (e.g. casting 'upshot' → HoldCrew 'v3'), so store both; hc_slug NULL
-// falls back to the tenant slug. Set by scripts/link-holdcrew.js. hc_token NULL =
-// not linked → Book still records the booking locally but can't write the Job Log
-// (surfaced honestly to the user).
-for (const col of ['hc_slug', 'hc_token']) {
-  if (!db.prepare('PRAGMA table_info(tenants)').all().some((c) => c.name === col)) {
-    db.exec(`ALTER TABLE tenants ADD COLUMN ${col} TEXT`);
-  }
+// HoldCrew linkage: a Held/Booked candidate is promoted into that company's
+// HoldCrew Job Log via the v3-talent-save webhook, which authenticates with the
+// company's registry slug + token. ONE slug — the casting tenant slug IS the
+// HoldCrew company slug (Eric, 2026-07-08). Store just the token; set by
+// scripts/link-holdcrew.js. hc_token NULL = not linked → Hold/Book still record
+// locally but can't write the Job Log (surfaced honestly to the user).
+if (!db.prepare('PRAGMA table_info(tenants)').all().some((c) => c.name === 'hc_token')) {
+  db.exec('ALTER TABLE tenants ADD COLUMN hc_token TEXT');
 }
+// Drop the short-lived hc_slug bridge if a prior build added it (one-slug now).
+try {
+  if (db.prepare('PRAGMA table_info(tenants)').all().some((c) => c.name === 'hc_slug')) {
+    db.exec('ALTER TABLE tenants DROP COLUMN hc_slug');
+  }
+} catch (e) { /* older sqlite w/o DROP COLUMN — harmless to leave the unused column */ }
 
 // Media files (casting tapes / headshots). A candidate has MANY takes, not one,
 // so tapes live here (one row per file) rather than a single tape_key column.

@@ -26,14 +26,17 @@ DO DNS-01, issued). Tenant `upshot` onboarded (temp password). Verified over TLS
 `https://upshot.casting.holdcrew.com` — login gate, board page, API persistence round-trip; reels
 unaffected. Git: committed locally (`git init`, branch `main`); **push pending** — GitHub repo
 `rikrokrok/holdcrew-casting` must be created first (no `gh`/token on box; SSH key works).
-**Book → Job Log (task 8) — DONE + verified 2026-07-08:** Booking a candidate into a role writes a
-confirmed Talent row into that job's HoldCrew Job Log via the reused `v3-talent-save` webhook. Per-tenant
-HoldCrew linkage in `tenants.hc_slug`/`hc_token` (casting slug ≠ HoldCrew slug in general — casting
-`upshot` → HoldCrew `v3`). Link a tenant: `node scripts/link-holdcrew.js <castingSlug> [hcSlug]` (reads
-the token from the company registry via `util-sheet-write`; re-run if the token rotates). Book button
-lives on the drawer's role rows; `src/holdcrew.js` + `POST /candidates/:id/book`. ⚠️ The live `upshot`
-board's `?job=PWS` is a **sample** — a real Book there writes a `Job_PWS` Talent row into the v3/Upshot
-Job Log; book against a real job suffix for production use.
+**Hold / Book → Job Log (task 8) — DONE + verified 2026-07-08:** Holding or Booking a candidate into a
+role writes a Talent row into that job's HoldCrew Job Log via the reused `v3-talent-save` webhook —
+**Hold** = pending (blank Hold Status), **Book** = Confirmed (syncs to the call sheet); same row (upsert
+by name+job). **ONE slug — the casting tenant slug IS the HoldCrew company slug.** Per-tenant token in
+`tenants.hc_token`; link with `node scripts/link-holdcrew.js <slug>` (reads the token from the company
+registry via `util-sheet-write`; re-run if the token rotates). Hold/Book buttons on the drawer's role
+rows; `src/holdcrew.js` + `POST /candidates/:id/{hold,book}`.
+⚠️ **`upshot` is unlinked until the HoldCrew company `v3` is renamed to `upshot`** (Eric's pending
+rename). After the rename: `node scripts/link-holdcrew.js upshot`. `test` → HoldCrew `test` is linked
+(locked tenant, for verification against `Job_LOTTERY`). Also: the live board's `?job=PWS` is a
+**sample** — a real commit writes a `Job_PWS` Talent row; use a real job suffix for production.
 **NOT DONE:** media/Wasabi (task 6 — tapes seeded, upload UI pending), CSV import UI polish, client
 presentation (task 7), job.html tile (task 9, decoupled), drawer single-role simplification.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by

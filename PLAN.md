@@ -62,19 +62,21 @@ Mirror the Reels patterns now; once both products are stable, factor the genuine
 ### Integration with the rest of HoldCrew
 - **Entry:** a **CASTING tile on `job.html`** deep-links to `<company>.casting.holdcrew.com/?job=<suffix>`
   (like the HW tile → wrapkit). A deep-link, not a cross-origin fetch — no CORS.
-- **Book → promote:** ✅ **DONE (2026-07-08).** When a candidate is Booked into a role, casting POSTs
-  to HoldCrew's existing **`v3-talent-save`** webhook (the canonical, idempotent Job Log talent writer —
-  reused, not reinvented) to upsert a confirmed **TALENT row** in that job's Job Log (Department=Talent,
-  Hold Status=Confirmed, character = the role, agent block + union carried across). This is the single
-  cross-system write; casting owns curation, HoldCrew owns the job record. **Auth:** the company presents
-  its registry slug+token, stored per casting tenant (`tenants.hc_slug`/`hc_token`, set by
-  `scripts/link-holdcrew.js`; the casting slug and HoldCrew slug can differ, e.g. casting `upshot` →
-  HoldCrew `v3`). The company is taken from the authenticated tenant (never client input), so a booking
-  can only ever touch that company's own Job Log. `job` (?job= suffix) → tab `Job_<suffix>` (job.html's
-  rule). Backend: `src/holdcrew.js` + `POST /api/casting/candidates/:id/book`; UI: a **Book** button on
-  the drawer's role rows (Booked is reachable only via Book, keeping booked ⟺ promoted). Usage/buyout/
-  fees at Book are still deferred (columns exist in v3-talent-save: sessionCost/usageCost/days — sent
-  blank for now, producer fills on the job side).
+- **Hold / Book → promote:** ✅ **DONE (2026-07-08).** The two commitments both POST to HoldCrew's
+  existing **`v3-talent-save`** webhook (the canonical, idempotent Job Log talent writer — reused, not
+  reinvented) to upsert a **TALENT row** in that job's Job Log (Department=Talent, character = the role,
+  agent block + union carried across). **Hold** writes it **pending** (blank Hold Status → tentative
+  talent, not yet on the call sheet); **Book** writes it **Confirmed** (which syncs to the call sheet/
+  DPR). Same row (upsert by name+job), so Hold → Book just flips it to Confirmed. This is the single
+  cross-system write; casting owns curation, HoldCrew owns the job record. **Auth / ONE slug:** the
+  casting tenant slug **is** the HoldCrew company slug; the tenant stores just the registry token
+  (`tenants.hc_token`, set by `scripts/link-holdcrew.js <slug>`). The company is taken from the
+  authenticated tenant (never client input), so a commit can only ever touch that company's own Job Log.
+  `job` (?job= suffix) → tab `Job_<suffix>` (job.html's rule). Backend: `src/holdcrew.js` + `POST
+  /candidates/:id/{hold,book}` (shared `commitToRole`); UI: **Hold** + **Book** buttons on the drawer's
+  role rows (both reachable only via their buttons — keeps held ⟺ pending-in-Job-Log, booked ⟺
+  confirmed). Usage/buyout/fees still deferred (v3-talent-save has sessionCost/usageCost/days columns —
+  sent blank for now, producer fills on the job side).
 - **Shared registry:** access-gating + subscription/usage lives in the shared account registry (#10).
 
 ---
@@ -201,10 +203,11 @@ Wasabi via short-lived presigned URLs.
 6. **Media** — `WASABI_CASTING_BUCKET` config + `presignKey`; headshot + tape upload; wire the tape
    lightbox to real playback; (transcode decision).
 7. **Client presentation** — `casting_sends` token → passive public page (Select-tier).
-8. **Book → promote** — ✅ **DONE (2026-07-08).** Reuses HoldCrew's `v3-talent-save` webhook (idempotent
-   upsert by name+job); per-tenant `hc_slug`/`hc_token` linkage (`scripts/link-holdcrew.js`); Book button
-   in the drawer. Verified end-to-end against `test`/`Job_LOTTERY` (mapping confirmed, row cleaned up).
-   Usage/buyout/fees still deferred. See the "Book → promote" bullet above.
+8. **Hold / Book → promote** — ✅ **DONE (2026-07-08).** Reuses HoldCrew's `v3-talent-save` webhook
+   (idempotent upsert by name+job); **one slug** (casting tenant slug = HoldCrew company slug), per-tenant
+   `hc_token` linkage (`scripts/link-holdcrew.js <slug>`); Hold (pending) + Book (Confirmed) buttons in
+   the drawer. Verified end-to-end against `test`/`Job_LOTTERY` (Hold=blank→Book=Confirmed on the same
+   row, cleaned up). Usage/buyout/fees still deferred. See the "Hold / Book → promote" bullet above.
 9. **job.html CASTING tile** — deep-link into the product. **Decoupled / do-whenever (Eric, 2026-07-07):**
    casting stands alone; the HoldCrew job-page link is available any time and is never a blocker or
    critical-path dependency. Not required for the product to be usable.

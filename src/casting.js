@@ -20,7 +20,7 @@ const eff = (req) => req.tenant.slug;
 // 'submitted' = assigned to a role (in the General Call) but not yet shortlisted;
 // it's the base an actor lands at when their role is known (CSV/import or the
 // card's role picker). Shortlisting promotes them onto the Selects board.
-const STATUSES = new Set(['submitted', 'shortlist', 'callback', 'recommend', 'backup', 'select', 'booked', 'pass']);
+const STATUSES = new Set(['submitted', 'shortlist', 'callback', 'recommend', 'backup', 'select', 'hold', 'booked', 'pass']);
 
 // ── project resolution (one board per tenant+job) ────────────────────────────
 const qProject = db.prepare('SELECT * FROM casting_projects WHERE tenant = ? AND job = ?');
@@ -264,12 +264,14 @@ router.delete('/assignments', (req, res) => {
   res.status(204).end();
 });
 
-// ── Book → promote to the HoldCrew Job Log (the single cross-system write) ────
-// Marks the (candidate × role) assignment 'booked' (local truth), then writes a
-// confirmed Talent row into that job's HoldCrew Job Log via v3-talent-save. The
-// local booking always succeeds; the Job Log write is reported honestly — if it
-// fails, the candidate stays Booked here and the UI tells the user to retry.
-router.post('/candidates/:id/book', async (req, res) => {
+// ── Hold / Book → promote to the HoldCrew Job Log (the single cross-system write)
+// Hold and Book are the two commitments. Both mark the (candidate × role)
+// assignment (local truth) AND upsert a Talent row into that job's HoldCrew Job
+// Log via v3-talent-save — Hold writes it pending (blank Hold Status, so it's a
+// tentative talent, not yet on the call sheet), Book writes it Confirmed (which
+// syncs to the call sheet/DPR). The local commit always succeeds; the Job Log
+// write is reported honestly — on failure the commit stands and the UI says retry.
+async function commitToRole(req, res, castingStatus, holdStatus) {
   const t = eff(req);
   const cand = qCand.get(req.params.id, t);
   if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
@@ -279,18 +281,18 @@ router.post('/candidates/:id/book', async (req, res) => {
   if (cand.project_id !== role.project_id) return res.status(400).json({ error: 'cross_project' });
   const project = db.prepare('SELECT * FROM casting_projects WHERE id = ?').get(cand.project_id);
 
-  // 1) local truth: upsert the assignment to 'booked'.
+  // 1) local truth: upsert the assignment status.
   const existing = db.prepare('SELECT id FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cand.id, rid);
   if (existing) {
-    db.prepare("UPDATE casting_assignments SET status = 'booked', updated_at = datetime('now') WHERE id = ?").run(existing.id);
+    db.prepare("UPDATE casting_assignments SET status = ?, updated_at = datetime('now') WHERE id = ?").run(castingStatus, existing.id);
   } else {
     const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(rid).n;
-    db.prepare("INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, 'booked', ?)")
-      .run(assignmentId(), cand.project_id, t, cand.id, rid, ord);
+    db.prepare('INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(assignmentId(), cand.project_id, t, cand.id, rid, castingStatus, ord);
   }
 
-  // 2) cross-system: promote to the Job Log as confirmed Talent (character = the
-  // role's character, or the role name if no character was set).
+  // 2) cross-system: promote to the Job Log (character = the role's character, or
+  // the role name if none). holdStatus '' = pending hold, 'Confirmed' = booked.
   const talent = {
     name: cand.name,
     email: cand.email || '',
@@ -302,15 +304,18 @@ router.post('/candidates/:id/book', async (req, res) => {
     agentPhone: cand.agent_phone || '',
     union: cand.union_status || '',
     notes: cand.note || '',
-    status: 'Confirmed',
+    status: holdStatus,
   };
   try {
     const jobLog = await holdcrew.promoteToJobLog(t, project.job, talent);
-    res.json({ ok: true, status: 'booked', promoted: true, company: t, jobLog });
+    res.json({ ok: true, status: castingStatus, promoted: true, company: t, jobLog });
   } catch (e) {
-    res.json({ ok: true, status: 'booked', promoted: false, company: t, error: e.message });
+    res.json({ ok: true, status: castingStatus, promoted: false, company: t, error: e.message });
   }
-});
+}
+
+router.post('/candidates/:id/hold', (req, res) => commitToRole(req, res, 'hold', ''));
+router.post('/candidates/:id/book', (req, res) => commitToRole(req, res, 'booked', 'Confirmed'));
 
 // ── Media (headshots / tapes) — 302 to a short-lived presigned Wasabi GET ────
 // Tenant-scoped: a key must live under the requesting tenant's prefix, so one
