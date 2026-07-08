@@ -43,7 +43,7 @@
     .vchip--none:hover { border-color: var(--border); color: var(--muted); }
 
     /* ── GENERAL CALL grid ── */
-    .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+    .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
     .cc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; transition: border-color 0.12s, transform 0.08s; }
     .cc-card:hover { border-color: var(--subtle); }
     .cc-card:active { transform: scale(0.995); }
@@ -51,16 +51,18 @@
     .cc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .cc-photo__video { position: absolute; left: 8px; bottom: 8px; }
     .cc-num { position: absolute; top: 8px; left: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: #000; background: var(--amber); border-radius: 5px; padding: 2px 7px; letter-spacing: 0.03em; }
-    .cc-body { padding: 10px 12px 12px; }
-    .cc-name { font-size: 15px; color: var(--text); font-weight: 500; line-height: 1.2; }
-    .cc-pronouns { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 1px; min-height: 12px; }
+    .cc-body { padding: 8px 10px 10px; }
+    .cc-name { font-size: 13.5px; color: var(--text); font-weight: 500; line-height: 1.2; }
+    .cc-pronouns { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); margin-top: 1px; min-height: 11px; }
     /* role picker + one-tap shortlist, straight on the card (no drawer) */
-    .cc-roles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+    .cc-roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; align-items: center; }
     .cc-rolesel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 6px; cursor: pointer; max-width: 58%; }
     .cc-rolesel:hover { border-color: var(--subtle); }
     .cc-rolesel:focus { outline: none; border-color: var(--amber); }
     .cc-sl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #000; background: var(--amber); border: 1px solid var(--amber); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-weight: 600; }
     .cc-sl:hover { background: #e09520; }
+    .cc-rolename { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); }
+    .cc-norole { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); font-style: italic; }
     .cc-noroles { font-family: var(--font-mono); font-size: 9px; color: var(--muted); font-style: italic; }
 
     /* ── SELECTS (role-based) ── */
@@ -176,7 +178,7 @@
     .btn-cancel { background: none; border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 8px 16px; cursor: pointer; font-size: 13px; }
 
     @media (max-width: 600px) {
-      .cc-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .cc-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
       .dr-top { flex-direction: column; }
       .dr-photo { width: 120px; }
       .detail-grid { grid-template-columns: 1fr; }
@@ -331,21 +333,17 @@
     }
     function generalCard(c) {
       const pr = primaryAssignment(c);
-      // Role picker (assign / change / clear) + a one-tap Shortlist. No drawer.
+      // Role shown as text; assign/change happens in the drawer (tap the card).
+      // The one quick action on the card is Shortlist.
       let roleCtrl;
-      if (!roles.length) {
-        roleCtrl = `<span class="cc-noroles">Add a role on the Selects tab first</span>`;
+      if (pr) {
+        const rn = (roleById(pr.roleId) || {}).name || '—';
+        roleCtrl = `<span class="cc-rolename">${esc(rn)}</span>` +
+          (pr.status === 'submitted'
+            ? `<button class="cc-sl" onclick="event.stopPropagation();shortlist('${c.id}')">Shortlist</button>`
+            : statusBadge(pr.status));
       } else {
-        const sel = `<select class="cc-rolesel" onclick="event.stopPropagation()" onchange="event.stopPropagation();assignRole('${c.id}', this.value)">
-            <option value="">— role —</option>
-            ${roles.map(r => `<option value="${r.id}" ${pr && pr.roleId === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
-          </select>`;
-        const action = pr
-          ? (pr.status === 'submitted'
-              ? `<button class="cc-sl" onclick="event.stopPropagation();shortlist('${c.id}')">Shortlist</button>`
-              : statusBadge(pr.status))
-          : '';
-        roleCtrl = sel + action;
+        roleCtrl = `<span class="cc-norole">No role — tap to assign</span>`;
       }
       const nt = (c.tapes || []).length;
       const video = nt
