@@ -18,6 +18,8 @@ module.exports = {
   candidateId:  () => 'c_' + rand(10),
   assignmentId: () => 'a_' + rand(10),
   mediaId:      () => 'm_' + rand(10),
+  comboId:      () => 'cb_' + rand(9),
+  comboSlotId:  () => 'cs_' + rand(9),
   shareToken:   () => rand(22),
   rand,
 };

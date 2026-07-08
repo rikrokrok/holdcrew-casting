@@ -10,7 +10,7 @@ const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
 const holdcrew = require('./holdcrew');
-const { projectId, roleId, candidateId, assignmentId, mediaId } = require('./ids');
+const { projectId, roleId, candidateId, assignmentId, mediaId, comboId, comboSlotId } = require('./ids');
 
 const router = express.Router();
 
@@ -83,6 +83,15 @@ function toCand(row) {
 const qTapes = db.prepare("SELECT id, key, label FROM casting_media WHERE candidate_id = ? AND kind = 'tape' ORDER BY ord, created_at");
 const tapesFor = (candId) => qTapes.all(candId).map((m) => ({ id: m.id, key: m.key, label: m.label || '' }));
 
+// Combo (assembled option) row -> API shape { id, grp, name, note, ord, slots:{roleId:candId} }.
+const qComboSlots = db.prepare('SELECT role_id, candidate_id FROM casting_combo_slots WHERE combo_id = ? ORDER BY ord');
+function toCombo(row) {
+  const slots = {};
+  for (const s of qComboSlots.all(row.id)) slots[s.role_id] = s.candidate_id;
+  return { id: row.id, grp: row.grp || '', name: row.name, note: row.note || '', ord: row.ord, slots };
+}
+const qCombo = db.prepare('SELECT * FROM casting_combos WHERE id = ? AND tenant = ?');
+
 // API body -> column map. Only keys present in `body` are returned (partial-safe).
 function fromBody(body) {
   const out = {};
@@ -125,10 +134,12 @@ router.get('/board', (req, res) => {
   const asg = db.prepare('SELECT candidate_id, role_id, status FROM casting_assignments WHERE project_id = ?').all(p.id);
   const byCand = {};
   for (const a of asg) (byCand[a.candidate_id] ||= {})[a.role_id] = a.status;
+  const combos = db.prepare('SELECT * FROM casting_combos WHERE project_id = ? ORDER BY ord, created_at').all(p.id);
   res.json({
     project: { id: p.id, job: p.job, title: p.title },
     roles,
     candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {}, tapes: tapesFor(c.id) })),
+    combos: combos.map(toCombo),
   });
 });
 
@@ -316,6 +327,87 @@ async function commitToRole(req, res, castingStatus, holdStatus) {
 
 router.post('/candidates/:id/hold', (req, res) => commitToRole(req, res, 'hold', ''));
 router.post('/candidates/:id/book', (req, res) => commitToRole(req, res, 'booked', 'Confirmed'));
+
+// ── Combinations (named assembled casts for client options) ──────────────────
+router.post('/combos', (req, res) => {
+  const t = eff(req);
+  const job = String(req.body?.job || '').trim();
+  const name = String(req.body?.name || '').trim();
+  if (!job || !name) return res.status(400).json({ error: 'job_and_name_required' });
+  const p = getOrCreateProject(t, job);
+  const grp = String(req.body?.grp || '').trim();
+  const note = String(req.body?.note || '').trim();
+  const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_combos WHERE project_id = ?').get(p.id).n;
+  const id = comboId();
+  db.prepare('INSERT INTO casting_combos (id, project_id, tenant, grp, name, note, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(id, p.id, t, grp, name, note, ord);
+  res.status(201).json(toCombo(db.prepare('SELECT * FROM casting_combos WHERE id = ?').get(id)));
+});
+
+router.put('/combos/:id', (req, res) => {
+  const row = qCombo.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'combo_not_found' });
+  const grp  = req.body?.grp  !== undefined ? String(req.body.grp).trim()  : row.grp;
+  const name = req.body?.name !== undefined ? String(req.body.name).trim() : row.name;
+  const note = req.body?.note !== undefined ? String(req.body.note).trim() : (row.note || '');
+  const ord  = req.body?.ord  !== undefined ? Number(req.body.ord)         : row.ord;
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  db.prepare("UPDATE casting_combos SET grp = ?, name = ?, note = ?, ord = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(grp, name, note, ord, row.id);
+  res.json(toCombo(db.prepare('SELECT * FROM casting_combos WHERE id = ?').get(row.id)));
+});
+
+router.delete('/combos/:id', (req, res) => {
+  const row = qCombo.get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'combo_not_found' });
+  db.prepare('DELETE FROM casting_combos WHERE id = ?').run(row.id); // slots cascade
+  res.status(204).end();
+});
+
+// Duplicate a combo + its slots — the fast path to a variant (rename, swap a few).
+router.post('/combos/:id/duplicate', (req, res) => {
+  const t = eff(req);
+  const row = qCombo.get(req.params.id, t);
+  if (!row) return res.status(404).json({ error: 'combo_not_found' });
+  const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_combos WHERE project_id = ?').get(row.project_id).n;
+  const newName = (String(req.body?.name || '').trim()) || (row.name + ' copy');
+  const id = comboId();
+  db.transaction(() => {
+    db.prepare('INSERT INTO casting_combos (id, project_id, tenant, grp, name, note, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, row.project_id, t, row.grp, newName, row.note, ord);
+    for (const s of db.prepare('SELECT role_id, candidate_id, ord FROM casting_combo_slots WHERE combo_id = ?').all(row.id)) {
+      db.prepare('INSERT INTO casting_combo_slots (id, combo_id, tenant, role_id, candidate_id, ord) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(comboSlotId(), id, t, s.role_id, s.candidate_id, s.ord);
+    }
+  })();
+  res.status(201).json(toCombo(db.prepare('SELECT * FROM casting_combos WHERE id = ?').get(id)));
+});
+
+// Set (or clear) a combo's pick for one role. candidateId '' | null clears the slot.
+router.put('/combos/:id/slots', (req, res) => {
+  const t = eff(req);
+  const combo = qCombo.get(req.params.id, t);
+  if (!combo) return res.status(404).json({ error: 'combo_not_found' });
+  const rid = String(req.body?.roleId || '');
+  const role = qRole.get(rid, t);
+  if (!role || role.project_id !== combo.project_id) return res.status(404).json({ error: 'role_not_found' });
+  const cid = req.body?.candidateId ? String(req.body.candidateId) : '';
+  if (!cid) {
+    db.prepare('DELETE FROM casting_combo_slots WHERE combo_id = ? AND role_id = ?').run(combo.id, rid);
+    return res.json({ ok: true, roleId: rid, candidateId: '' });
+  }
+  const cand = qCand.get(cid, t);
+  if (!cand || cand.project_id !== combo.project_id) return res.status(404).json({ error: 'candidate_not_found' });
+  const existing = db.prepare('SELECT id FROM casting_combo_slots WHERE combo_id = ? AND role_id = ?').get(combo.id, rid);
+  if (existing) {
+    db.prepare('UPDATE casting_combo_slots SET candidate_id = ? WHERE id = ?').run(cid, existing.id);
+  } else {
+    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_combo_slots WHERE combo_id = ?').get(combo.id).n;
+    db.prepare('INSERT INTO casting_combo_slots (id, combo_id, tenant, role_id, candidate_id, ord) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(comboSlotId(), combo.id, t, rid, cid, ord);
+  }
+  res.json({ ok: true, roleId: rid, candidateId: cid });
+});
 
 // ── Media (headshots / tapes) — 302 to a short-lived presigned Wasabi GET ────
 // Tenant-scoped: a key must live under the requesting tenant's prefix, so one

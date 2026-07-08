@@ -135,7 +135,24 @@ casting_assignments     the Selects board — the (candidate × role) rows
 casting_sends           tokenized client-presentation link (mirrors reels `sends`)
   token TEXT PK, project_id TEXT, role_id TEXT NULL,
   min_tier TEXT DEFAULT 'select', expiry TEXT, created_at
+
+casting_combos          named, freely-labelled assembled options (client combos)
+  id TEXT PK, project_id, tenant,
+  grp TEXT ('' = ungrouped, free-text cluster e.g. "Family"),
+  name TEXT (free-text, "Older Family" / "Client fave" / "Option B"),
+  note, ord, created_at, updated_at
+casting_combo_slots     one pick per role per combo
+  id TEXT PK, combo_id, tenant, role_id, candidate_id, ord,
+  UNIQUE(combo_id, role_id)
 ```
+
+**Combinations (Selects tab) — ✅ DONE 2026-07-08.** Build the client's alternative casts: named
+options that pick one actor per role (e.g. an "Older Family" vs a "Younger Family"). **Freely named**
+(name anything; optional free-text `grp` clusters them). **No structural anchor** — each combo is an
+independent cast; a reused actor across combos is incidental, not enforced. **Duplicate** clones a combo
++ its slots as the fast path to a variant (swap a couple of picks). Slots pick from that role's selects
+(shortlisted+). `POST/PUT/DELETE /combos`, `POST /combos/:id/duplicate`, `PUT /combos/:id/slots`; UI =
+combo cards grouped by `grp` under the role sections. Present-to-client per combo feeds task 7.
 
 Front-end mapping: **Cattle Call** = `casting_candidates` for the project; **Selects** =
 `casting_assignments` grouped by role. The UI's per-candidate `{role: status}` map is just that

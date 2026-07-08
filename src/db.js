@@ -158,6 +158,39 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_media_project ON casting_media(project_id);
 `);
 
+// Combinations ("combos" / groups): named, freely-labelled assembled options —
+// one actor per role — for presenting the client alternative casts (e.g. an
+// "Older Family" vs a "Younger Family"). grp = an optional free-text cluster
+// label ('' = ungrouped). No structural anchor: each combo is an independent
+// cast; overlap between combos (a reused actor) is incidental, not enforced.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS casting_combos (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES casting_projects(id) ON DELETE CASCADE,
+    tenant      TEXT NOT NULL,
+    grp         TEXT NOT NULL DEFAULT '',
+    name        TEXT NOT NULL,
+    note        TEXT,
+    ord         INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_combos_project ON casting_combos(project_id);
+
+  -- one pick per role per combo (a "family" has one dad); a candidate can be a
+  -- slot in many combos.
+  CREATE TABLE IF NOT EXISTS casting_combo_slots (
+    id           TEXT PRIMARY KEY,
+    combo_id     TEXT NOT NULL REFERENCES casting_combos(id) ON DELETE CASCADE,
+    tenant       TEXT NOT NULL,
+    role_id      TEXT NOT NULL REFERENCES casting_roles(id) ON DELETE CASCADE,
+    candidate_id TEXT NOT NULL REFERENCES casting_candidates(id) ON DELETE CASCADE,
+    ord          INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (combo_id, role_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_comboslots_combo ON casting_combo_slots(combo_id);
+`);
+
 // Migrate the legacy single tape_key -> a casting_media 'Take 1' row. Idempotent
 // (skips a candidate whose tape_key is already represented).
 {

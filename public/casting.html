@@ -143,6 +143,33 @@
     .cast-toast.show { opacity: 1; transform: translate(-50%, 0); }
     .cast-toast.warn { background: var(--red); color: #fff; }
 
+    /* ── combinations (selects tab) ── */
+    .combos-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 1.7rem 0 0.9rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+    .combos-bar__label { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.05em; color: var(--text); }
+    .combos-bar__hint { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); flex: 1; min-width: 120px; }
+    .add-combo-btn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); background: none; border: 1px dashed var(--amber-dim); border-radius: var(--radius); padding: 6px 12px; cursor: pointer; }
+    .add-combo-btn:hover { background: rgba(245,166,35,0.08); }
+    .combos-empty { font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding: 12px 4px; }
+    .combo-grp { margin-bottom: 1rem; }
+    .combo-grp__label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim); margin: 0 0 8px 2px; }
+    .combo-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+    .combo-card { width: 232px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .combo-card__head { display: flex; align-items: center; gap: 4px; padding: 7px 8px 7px 12px; border-bottom: 1px solid var(--border-inner); background: var(--surface-raised); }
+    .combo-name { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 16px; letter-spacing: 0.03em; color: var(--text); background: none; border: none; padding: 2px 0; }
+    .combo-name:focus { outline: none; color: var(--amber); }
+    .combo-card__actions { display: flex; gap: 1px; flex-shrink: 0; }
+    .combo-act { background: none; border: none; color: var(--subtle); cursor: pointer; font-size: 13px; line-height: 1; padding: 4px 5px; border-radius: 4px; }
+    .combo-act:hover { color: var(--text); background: var(--surface-mid); }
+    .combo-act--del:hover { color: var(--red); }
+    .combo-slots { padding: 5px 10px 9px; }
+    .combo-slot { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border-inner); }
+    .combo-slot:last-child { border-bottom: none; }
+    .combo-thumb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: var(--surface-mid); flex-shrink: 0; }
+    .combo-thumb--empty { border: 1px dashed var(--dim); box-sizing: border-box; }
+    .combo-slot__role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); width: 50px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .combo-pick { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 6px; cursor: pointer; }
+    .combo-pick:focus { outline: none; border-color: var(--amber); }
+
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
     .d-item { min-width: 0; }
     .d-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
@@ -293,11 +320,13 @@
       },
     };
 
-    let board = { project: null, roles: [], candidates: [] };
+    let board = { project: null, roles: [], candidates: [], combos: [] };
     let roles = [];
     let cands = [];
+    let combos = [];
     const byId = id => cands.find(c => c.id === id);
     const roleById = id => roles.find(r => r.id === id);
+    const comboById = id => combos.find(c => c.id === id);
 
     // Headshot: real headshots (Wasabi) arrive with the media slice; until then a
     // stable placeholder avatar keyed on the name so cards aren't blank.
@@ -313,6 +342,7 @@
         board = await api.get(`/api/casting/board?job=${encodeURIComponent(JOB)}`);
         roles = board.roles || [];
         cands = board.candidates || [];
+        combos = board.combos || [];
         render();
       } catch (e) {
         if (e.message === 'auth') return;
@@ -424,7 +454,93 @@
       </div>`;
       if (!roles.length) return html + `<div class="cast-empty"><p>Add a role to start building selects.</p></div>`;
       html += roles.map(roleSection).join('');
+      html += combosSection();
       return html;
+    }
+
+    // ── COMBINATIONS: named, freely-labelled assembled casts (client options) ──
+    // e.g. an "Older Family" vs a "Younger Family". Each combo picks one actor per
+    // role from that role's selects; Duplicate spins a variant to swap a few picks.
+    function combosSection() {
+      // cluster by the free-text group label; ungrouped ('') first, in creation order.
+      const byGrp = {}; const order = [];
+      for (const cb of combos) { const g = cb.grp || ''; if (!(g in byGrp)) { byGrp[g] = []; order.push(g); } byGrp[g].push(cb); }
+      let html = `<div class="combos-bar">
+        <span class="combos-bar__label">Combinations</span>
+        <span class="combos-bar__hint">Assemble named options to present — an older vs younger family, etc.</span>
+        <button class="add-combo-btn" onclick="newCombo()">+ New combination</button>
+      </div>`;
+      if (!combos.length) return html + `<div class="combos-empty">No combinations yet. Build one to present the client an assembled cast.</div>`;
+      html += order.map(g => {
+        const label = g ? `<div class="combo-grp__label">${esc(g)}</div>` : '';
+        return `<div class="combo-grp">${label}<div class="combo-cards">${byGrp[g].map(comboCard).join('')}</div></div>`;
+      }).join('');
+      return html;
+    }
+    function comboCard(cb) {
+      const rows = roles.map(r => {
+        const cid = cb.slots[r.id] || '';
+        const chosen = cid ? byId(cid) : null;
+        const pool = cands.filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]));
+        const opts = `<option value="">—</option>` +
+          pool.map(c => `<option value="${c.id}" ${c.id===cid?'selected':''}>${esc(c.name)}</option>`).join('');
+        const thumb = chosen
+          ? `<img class="combo-thumb" src="${esc(photoUrl(chosen))}" alt="" loading="lazy">`
+          : `<span class="combo-thumb combo-thumb--empty"></span>`;
+        return `<div class="combo-slot">
+          ${thumb}
+          <span class="combo-slot__role" title="${esc(r.name)}">${esc(r.name)}</span>
+          <select class="combo-pick" onchange="setSlot('${cb.id}','${r.id}',this.value)">${opts}</select>
+        </div>`;
+      }).join('');
+      return `<div class="combo-card">
+        <div class="combo-card__head">
+          <input class="combo-name" value="${esc(cb.name)}" title="Rename" onchange="renameCombo('${cb.id}',this.value)">
+          <div class="combo-card__actions">
+            <button class="combo-act" title="Duplicate to a variant" onclick="duplicateCombo('${cb.id}')">⧉</button>
+            <button class="combo-act" title="Present to client" onclick="presentCombo('${cb.id}')">▷</button>
+            <button class="combo-act combo-act--del" title="Delete" onclick="deleteCombo('${cb.id}')">✕</button>
+          </div>
+        </div>
+        <div class="combo-slots">${rows}</div>
+      </div>`;
+    }
+    async function newCombo() {
+      const name = (prompt('Name this combination — anything (e.g. "Older Family", "Client fave", "Option B"):') || '').trim();
+      if (!name) return;
+      const grp = (prompt('Group it under a label? Optional (e.g. "Family"). Leave blank for none:') || '').trim();
+      try { const cb = await api.send('POST', '/api/casting/combos', { job: JOB, name, grp }); combos.push(cb); render(); }
+      catch (e) { if (e.message==='auth') return; alert('Could not create the combination.'); }
+    }
+    async function renameCombo(id, name) {
+      const cb = comboById(id); if (!cb) return;
+      name = (name || '').trim();
+      if (!name || name === cb.name) { render(); return; }
+      try { const r = await api.send('PUT', '/api/casting/combos/'+id, { name }); Object.assign(cb, r); render(); }
+      catch (e) { if (e.message==='auth') return; alert('Could not rename.'); render(); }
+    }
+    async function deleteCombo(id) {
+      const cb = comboById(id); if (!cb) return;
+      if (!confirm(`Delete combination "${cb.name}"?`)) return;
+      try { await api.send('DELETE', '/api/casting/combos/'+id); combos = combos.filter(x => x.id !== id); render(); }
+      catch (e) { if (e.message==='auth') return; alert('Could not delete.'); }
+    }
+    async function duplicateCombo(id) {
+      try { const cb = await api.send('POST', `/api/casting/combos/${id}/duplicate`, {}); combos.push(cb); render(); }
+      catch (e) { if (e.message==='auth') return; alert('Could not duplicate.'); }
+    }
+    async function setSlot(cbId, roleId, candidateId) {
+      const cb = comboById(cbId); if (!cb) return;
+      try {
+        await api.send('PUT', `/api/casting/combos/${cbId}/slots`, { roleId, candidateId });
+        cb.slots = cb.slots || {};
+        if (candidateId) cb.slots[roleId] = candidateId; else delete cb.slots[roleId];
+        render();
+      } catch (e) { if (e.message==='auth') return; alert('Could not set the pick.'); render(); }
+    }
+    function presentCombo(id) {
+      const cb = comboById(id);
+      alert(`Client presentation for "${cb ? cb.name : ''}" — the passive assembled-cast lookbook — is the next slice to build (task 7).`);
     }
     function roleSection(r) {
       // Selects board = shortlisted+ (candidates still at 'submitted' stay in the

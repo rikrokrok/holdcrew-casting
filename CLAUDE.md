@@ -37,8 +37,14 @@ rows; `src/holdcrew.js` + `POST /candidates/:id/{hold,book}`.
 rename). After the rename: `node scripts/link-holdcrew.js upshot`. `test` → HoldCrew `test` is linked
 (locked tenant, for verification against `Job_LOTTERY`). Also: the live board's `?job=PWS` is a
 **sample** — a real commit writes a `Job_PWS` Talent row; use a real job suffix for production.
+**Combinations (Selects tab) — DONE 2026-07-08:** named, freely-labelled assembled casts (client
+options) — pick one actor per role, e.g. "Older Family" vs "Younger Family". Free-text name + optional
+free-text `grp` cluster; **no anchor assumption** (each combo independent); **Duplicate** clones for a
+variant. Tables `casting_combos` + `casting_combo_slots`; `src/casting.js` combo routes; combo cards
+under the role sections on the Selects tab. Present-to-client per combo = task 7 stub.
 **NOT DONE:** media/Wasabi (task 6 — tapes seeded, upload UI pending), CSV import UI polish, client
-presentation (task 7), job.html tile (task 9, decoupled), drawer single-role simplification.
+presentation (task 7 — incl. combo lookbook), job.html tile (task 9, decoupled), drawer single-role
+simplification, combo slot drag-to-fill (v1 uses per-role dropdowns).
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 
