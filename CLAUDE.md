@@ -26,8 +26,16 @@ DO DNS-01, issued). Tenant `upshot` onboarded (temp password). Verified over TLS
 `https://upshot.casting.holdcrew.com` — login gate, board page, API persistence round-trip; reels
 unaffected. Git: committed locally (`git init`, branch `main`); **push pending** — GitHub repo
 `rikrokrok/holdcrew-casting` must be created first (no `gh`/token on box; SSH key works).
-**NOT DONE:** git push (needs repo), media/Wasabi (task 6), CSV import (task 5), client presentation
-(task 7), job.html tile (task 9, decoupled).
+**Book → Job Log (task 8) — DONE + verified 2026-07-08:** Booking a candidate into a role writes a
+confirmed Talent row into that job's HoldCrew Job Log via the reused `v3-talent-save` webhook. Per-tenant
+HoldCrew linkage in `tenants.hc_slug`/`hc_token` (casting slug ≠ HoldCrew slug in general — casting
+`upshot` → HoldCrew `v3`). Link a tenant: `node scripts/link-holdcrew.js <castingSlug> [hcSlug]` (reads
+the token from the company registry via `util-sheet-write`; re-run if the token rotates). Book button
+lives on the drawer's role rows; `src/holdcrew.js` + `POST /candidates/:id/book`. ⚠️ The live `upshot`
+board's `?job=PWS` is a **sample** — a real Book there writes a `Job_PWS` Talent row into the v3/Upshot
+Job Log; book against a real job suffix for production use.
+**NOT DONE:** media/Wasabi (task 6 — tapes seeded, upload UI pending), CSV import UI polish, client
+presentation (task 7), job.html tile (task 9, decoupled), drawer single-role simplification.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 

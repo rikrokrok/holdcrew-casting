@@ -18,6 +18,10 @@ const cfg = {
   // One-time seed for the dev tenant's password; real passwords live in the DB.
   password: process.env.CASTING_PASSWORD || '',
 
+  // HoldCrew n8n webhook base — the single cross-system seam (Book → Job Log via
+  // v3-talent-save). Same droplet, so localhost by default.
+  hcWebhookUrl: (process.env.HC_WEBHOOK_URL || 'http://127.0.0.1:5678/webhook').replace(/\/$/, ''),
+
   wasabi: {
     endpoint: process.env.WASABI_ENDPOINT || 'https://s3.wasabisys.com',
     region: process.env.WASABI_REGION || 'us-east-1',

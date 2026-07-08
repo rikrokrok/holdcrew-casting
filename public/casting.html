@@ -127,6 +127,16 @@
     .st-select { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; cursor: pointer; }
     .st-select:focus { outline: none; border-color: var(--amber); }
     .st-select:disabled { opacity: 0.3; }
+    /* Book / booked (drawer role rows) */
+    .rr-book { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: #000; background: var(--green); border: 1px solid var(--green); border-radius: var(--radius); padding: 5px 11px; cursor: pointer; flex-shrink: 0; }
+    .rr-book:hover { filter: brightness(1.1); }
+    .rr-booked { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--green); background: none; border: 1px solid var(--green); border-radius: var(--radius); padding: 5px 9px; white-space: nowrap; }
+    .rr-unbook { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 3px; flex-shrink: 0; }
+    .rr-unbook:hover { color: var(--red); }
+    /* transient toast */
+    .cast-toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 24px); background: var(--green); color: #000; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; padding: 11px 18px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.55); opacity: 0; pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease; z-index: 4000; max-width: 90vw; text-align: center; }
+    .cast-toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .cast-toast.warn { background: var(--red); color: #fff; }
 
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
     .d-item { min-width: 0; }
@@ -488,13 +498,25 @@
       const roleRows = roles.map(r => {
         const on = r.id in asg;
         const st = on ? asg[r.id] : '';
-        const opts = STATUS_KEYS.map(k => `<option value="${k}" ${st===k?'selected':''}>${STATUS[k].label}</option>`).join('');
+        const booked = st === 'booked';
+        // 'booked' is reachable only via Book (which also writes the Job Log), so
+        // it's never a manual dropdown choice — keeps booked ⟺ promoted.
+        const opts = STATUS_KEYS.filter(k => k !== 'booked')
+          .map(k => `<option value="${k}" ${st===k?'selected':''}>${STATUS[k].label}</option>`).join('');
+        let ctrl;
+        if (booked) {
+          ctrl = `<span class="rr-booked" title="Written to the HoldCrew Job Log as confirmed Talent">✓ Booked · Job Log</span>
+            <button class="rr-unbook" title="Undo booking here (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
+        } else {
+          ctrl = `<select class="st-select" ${on?'':'disabled'} onchange="setStatus('${c.id}','${r.id}',this.value)">${opts}</select>` +
+            (on ? `<button class="rr-book" onclick="bookRole('${c.id}','${r.id}')">Book</button>` : '');
+        }
         return `<div class="rolerow">
           <button class="role-toggle ${on?'on':''}" onclick="toggleAssign('${c.id}','${r.id}')">
             <span class="role-toggle__box">${on?'✓':''}</span>
             <span><b>${esc(r.name)}</b> · ${esc(r.character||'')}</span>
           </button>
-          <select class="st-select" ${on?'':'disabled'} onchange="setStatus('${c.id}','${r.id}',this.value)">${opts}</select>
+          ${ctrl}
         </div>`;
       }).join('') || `<div class="role-empty">No roles defined yet — add one on the Selects tab.</div>`;
 
@@ -575,11 +597,44 @@
       try {
         const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId, status: val });
         if (c.assignments && roleId in c.assignments) c.assignments[roleId] = (res && res.status) || val;
+        // refresh the drawer only if it's actually open (so the Book/Booked control updates in place)
+        if (!document.getElementById('dr-back').classList.contains('hidden')) openDrawer(id);
         render();
       } catch (e) {
         if (e.message === 'auth') return;
         alert('Could not update the status.');
       }
+    }
+
+    // Book an actor into a role → writes them to the HoldCrew Job Log as confirmed
+    // Talent (the single cross-system write; see src/holdcrew.js). Idempotent on
+    // the HoldCrew side (upsert by name+job).
+    async function bookRole(id, roleId) {
+      const c = byId(id); if (!c) return;
+      const r = roleById(roleId);
+      if (!confirm(`Book ${c.name}${r ? ' as ' + r.name : ''}?\n\nThis adds them to this job's HoldCrew Job Log as confirmed Talent.`)) return;
+      try {
+        const res = await api.send('POST', `/api/casting/candidates/${id}/book`, { roleId });
+        c.assignments = c.assignments || {};
+        c.assignments[roleId] = 'booked';
+        openDrawer(id); render();
+        if (res && res.promoted) toast('Booked — added to the Job Log.');
+        else toast(`Booked here, but the Job Log write failed${res && res.error ? ' (' + res.error + ')' : ''}. Retry Book.`, true);
+      } catch (e) {
+        if (e.message === 'auth') return;
+        toast('Could not book: ' + e.message, true);
+      }
+    }
+
+    // transient toast (bottom-center)
+    let toastTimer;
+    function toast(msg, warn) {
+      let el = document.getElementById('cast-toast');
+      if (!el) { el = document.createElement('div'); el.id = 'cast-toast'; document.body.appendChild(el); }
+      el.textContent = msg;
+      el.className = 'cast-toast show' + (warn ? ' warn' : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.className = 'cast-toast'; }, warn ? 6500 : 3500);
     }
     async function setNumber(id, value) {
       const c = byId(id); if (!c) return;

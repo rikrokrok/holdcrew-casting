@@ -9,6 +9,7 @@
 const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
+const holdcrew = require('./holdcrew');
 const { projectId, roleId, candidateId, assignmentId, mediaId } = require('./ids');
 
 const router = express.Router();
@@ -261,6 +262,54 @@ router.delete('/assignments', (req, res) => {
   if (!qCand.get(cid, t)) return res.status(404).json({ error: 'candidate_not_found' });
   db.prepare('DELETE FROM casting_assignments WHERE candidate_id = ? AND role_id = ? AND tenant = ?').run(cid, rid, t);
   res.status(204).end();
+});
+
+// ── Book → promote to the HoldCrew Job Log (the single cross-system write) ────
+// Marks the (candidate × role) assignment 'booked' (local truth), then writes a
+// confirmed Talent row into that job's HoldCrew Job Log via v3-talent-save. The
+// local booking always succeeds; the Job Log write is reported honestly — if it
+// fails, the candidate stays Booked here and the UI tells the user to retry.
+router.post('/candidates/:id/book', async (req, res) => {
+  const t = eff(req);
+  const cand = qCand.get(req.params.id, t);
+  if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
+  const rid = String(req.body?.roleId || '');
+  const role = qRole.get(rid, t);
+  if (!role) return res.status(404).json({ error: 'role_not_found' });
+  if (cand.project_id !== role.project_id) return res.status(400).json({ error: 'cross_project' });
+  const project = db.prepare('SELECT * FROM casting_projects WHERE id = ?').get(cand.project_id);
+
+  // 1) local truth: upsert the assignment to 'booked'.
+  const existing = db.prepare('SELECT id FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cand.id, rid);
+  if (existing) {
+    db.prepare("UPDATE casting_assignments SET status = 'booked', updated_at = datetime('now') WHERE id = ?").run(existing.id);
+  } else {
+    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(rid).n;
+    db.prepare("INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, 'booked', ?)")
+      .run(assignmentId(), cand.project_id, t, cand.id, rid, ord);
+  }
+
+  // 2) cross-system: promote to the Job Log as confirmed Talent (character = the
+  // role's character, or the role name if no character was set).
+  const talent = {
+    name: cand.name,
+    email: cand.email || '',
+    phone: cand.phone || '',
+    character: role.character || role.name,
+    agentName: cand.agent || '',
+    agency: cand.agency || '',
+    agentEmail: cand.agent_email || '',
+    agentPhone: cand.agent_phone || '',
+    union: cand.union_status || '',
+    notes: cand.note || '',
+    status: 'Confirmed',
+  };
+  try {
+    const jobLog = await holdcrew.promoteToJobLog(t, project.job, talent);
+    res.json({ ok: true, status: 'booked', promoted: true, company: t, jobLog });
+  } catch (e) {
+    res.json({ ok: true, status: 'booked', promoted: false, company: t, error: e.message });
+  }
 });
 
 // ── Media (headshots / tapes) — 302 to a short-lived presigned Wasabi GET ────
