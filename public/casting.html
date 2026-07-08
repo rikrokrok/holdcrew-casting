@@ -161,14 +161,33 @@
     .combo-act { background: none; border: none; color: var(--subtle); cursor: pointer; font-size: 13px; line-height: 1; padding: 4px 5px; border-radius: 4px; }
     .combo-act:hover { color: var(--text); background: var(--surface-mid); }
     .combo-act--del:hover { color: var(--red); }
-    .combo-slots { padding: 5px 10px 9px; }
-    .combo-slot { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border-inner); }
+    .combo-slots { padding: 5px 8px 9px; }
+    .combo-slot { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 4px; border: none; border-bottom: 1px solid var(--border-inner); background: none; cursor: pointer; text-align: left; border-radius: 5px; }
     .combo-slot:last-child { border-bottom: none; }
-    .combo-thumb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: var(--surface-mid); flex-shrink: 0; }
+    .combo-slot:hover { background: var(--surface-mid); }
+    .combo-thumb { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--surface-mid); flex-shrink: 0; }
     .combo-thumb--empty { border: 1px dashed var(--dim); box-sizing: border-box; }
     .combo-slot__role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); width: 50px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .combo-pick { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 6px; cursor: pointer; }
-    .combo-pick:focus { outline: none; border-color: var(--amber); }
+    .combo-slot__name { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .combo-slot--empty .combo-slot__name { color: var(--muted); font-style: italic; }
+    .combo-slot__chev { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+
+    /* combo slot photo picker */
+    .cp-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: min(520px, 94vw); max-height: 84vh; overflow-y: auto; }
+    .cp-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border-inner); position: sticky; top: 0; background: var(--surface-raised); z-index: 1; }
+    .cp-title { font-family: var(--font-display); font-size: 21px; letter-spacing: 0.05em; color: var(--text); flex: 1; }
+    .cp-char { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); letter-spacing: 0.03em; }
+    .cp-close { background: none; border: none; color: var(--subtle); font-size: 24px; line-height: 1; cursor: pointer; }
+    .cp-close:hover { color: var(--text); }
+    .cp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 10px; padding: 16px; }
+    .cp-tile { background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 6px 9px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+    .cp-tile:hover { border-color: var(--amber); }
+    .cp-tile.sel { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
+    .cp-photo { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 6px; background: var(--surface-raised); }
+    .cp-name { font-family: var(--font-mono); font-size: 10.5px; color: var(--text); text-align: center; line-height: 1.25; word-break: break-word; }
+    .cp-tile--none { grid-column: 1 / -1; flex-direction: row; justify-content: center; color: var(--subtle); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 9px; }
+    .cp-tile--none:hover { color: var(--red); border-color: var(--red); }
+    .cp-empty { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding: 12px; text-align: center; line-height: 1.5; }
 
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
     .d-item { min-width: 0; }
@@ -242,6 +261,11 @@
   <!-- candidate detail drawer -->
   <div class="modal-back hidden" id="dr-back" onclick="closeDrawer(event)">
     <div class="drawer" id="drawer" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- combo slot photo picker -->
+  <div class="modal-back hidden" id="cp-back" onclick="closeSlotPicker(event)">
+    <div class="cp-modal" id="cp-modal" onclick="event.stopPropagation()"></div>
   </div>
 
   <!-- import CSV modal -->
@@ -481,17 +505,17 @@
       const rows = roles.map(r => {
         const cid = cb.slots[r.id] || '';
         const chosen = cid ? byId(cid) : null;
-        const pool = cands.filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]));
-        const opts = `<option value="">—</option>` +
-          pool.map(c => `<option value="${c.id}" ${c.id===cid?'selected':''}>${esc(c.name)}</option>`).join('');
         const thumb = chosen
           ? `<img class="combo-thumb" src="${esc(photoUrl(chosen))}" alt="" loading="lazy">`
           : `<span class="combo-thumb combo-thumb--empty"></span>`;
-        return `<div class="combo-slot">
+        // Slot = a clickable tile; picking opens a face grid (recognise by photo,
+        // not name). Chosen actor's face + name shows here.
+        return `<button class="combo-slot ${chosen?'':'combo-slot--empty'}" onclick="openSlotPicker('${cb.id}','${r.id}')">
           ${thumb}
           <span class="combo-slot__role" title="${esc(r.name)}">${esc(r.name)}</span>
-          <select class="combo-pick" onchange="setSlot('${cb.id}','${r.id}',this.value)">${opts}</select>
-        </div>`;
+          <span class="combo-slot__name">${chosen ? esc(chosen.name) : 'Pick…'}</span>
+          <span class="combo-slot__chev">▾</span>
+        </button>`;
       }).join('');
       return `<div class="combo-card">
         <div class="combo-card__head">
@@ -537,6 +561,44 @@
         if (candidateId) cb.slots[roleId] = candidateId; else delete cb.slots[roleId];
         render();
       } catch (e) { if (e.message==='auth') return; alert('Could not set the pick.'); render(); }
+    }
+
+    // Photo picker for a combo slot — pick an actor by face (that role's selects).
+    let pickerCtx = null;
+    function openSlotPicker(cbId, roleId) {
+      const cb = comboById(cbId), r = roleById(roleId); if (!cb || !r) return;
+      pickerCtx = { cbId, roleId };
+      const curId = cb.slots[roleId] || '';
+      const pool = cands.filter(c => c.assignments && roleId in c.assignments && onSelects(c.assignments[roleId]));
+      const tiles = pool.map(c => `
+        <button class="cp-tile ${c.id===curId?'sel':''}" onclick="chooseSlot('${c.id}')">
+          <img class="cp-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
+          <span class="cp-name">${esc(c.name)}</span>
+        </button>`).join('');
+      const body = pool.length ? tiles
+        : `<div class="cp-empty">No one shortlisted for ${esc(r.name)} yet — shortlist actors for this role from the General Call.</div>`;
+      document.getElementById('cp-modal').innerHTML = `
+        <div class="cp-head">
+          <span class="cp-title">${esc(r.name)}${r.character ? ` <span class="cp-char">${esc(r.character)}</span>` : ''}</span>
+          <button class="cp-close" onclick="closeSlotPicker()">&times;</button>
+        </div>
+        <div class="cp-grid">
+          ${curId ? `<button class="cp-tile cp-tile--none" onclick="chooseSlot('')">✕ Clear pick</button>` : ''}
+          ${body}
+        </div>`;
+      document.getElementById('cp-back').classList.remove('hidden');
+    }
+    function closeSlotPicker(e) {
+      if (e && e.target !== document.getElementById('cp-back')) return;
+      document.getElementById('cp-back').classList.add('hidden');
+      pickerCtx = null;
+    }
+    async function chooseSlot(candId) {
+      if (!pickerCtx) return;
+      const { cbId, roleId } = pickerCtx;
+      document.getElementById('cp-back').classList.add('hidden');
+      pickerCtx = null;
+      await setSlot(cbId, roleId, candId);
     }
     function presentCombo(id) {
       const cb = comboById(id);

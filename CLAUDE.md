@@ -40,11 +40,13 @@ rename). After the rename: `node scripts/link-holdcrew.js upshot`. `test` → Ho
 **Combinations (Selects tab) — DONE 2026-07-08:** named, freely-labelled assembled casts (client
 options) — pick one actor per role, e.g. "Older Family" vs "Younger Family". Free-text name + optional
 free-text `grp` cluster; **no anchor assumption** (each combo independent); **Duplicate** clones for a
-variant. Tables `casting_combos` + `casting_combo_slots`; `src/casting.js` combo routes; combo cards
-under the role sections on the Selects tab. Present-to-client per combo = task 7 stub.
+variant. Slots are filled via a **photo picker** (tap a slot → face grid of that role's selects → tap a
+face; casting is visual, so pick by photo not name — Eric 2026-07-08). Tables `casting_combos` +
+`casting_combo_slots`; `src/casting.js` combo routes; combo cards under the role sections on the Selects
+tab. Present-to-client per combo = task 7 stub.
 **NOT DONE:** media/Wasabi (task 6 — tapes seeded, upload UI pending), CSV import UI polish, client
 presentation (task 7 — incl. combo lookbook), job.html tile (task 9, decoupled), drawer single-role
-simplification, combo slot drag-to-fill (v1 uses per-role dropdowns).
+simplification, combo slot drag-to-fill (v1 uses the tap-a-face photo picker).
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 

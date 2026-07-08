@@ -150,9 +150,11 @@ casting_combo_slots     one pick per role per combo
 options that pick one actor per role (e.g. an "Older Family" vs a "Younger Family"). **Freely named**
 (name anything; optional free-text `grp` clusters them). **No structural anchor** — each combo is an
 independent cast; a reused actor across combos is incidental, not enforced. **Duplicate** clones a combo
-+ its slots as the fast path to a variant (swap a couple of picks). Slots pick from that role's selects
-(shortlisted+). `POST/PUT/DELETE /combos`, `POST /combos/:id/duplicate`, `PUT /combos/:id/slots`; UI =
-combo cards grouped by `grp` under the role sections. Present-to-client per combo feeds task 7.
++ its slots as the fast path to a variant (swap a couple of picks). Slots are filled via a **photo
+picker** — tap a slot → a face grid of that role's selects (shortlisted+) → tap a face (casting is
+visual; pick by photo, not a name dropdown — Eric 2026-07-08). `POST/PUT/DELETE /combos`, `POST
+/combos/:id/duplicate`, `PUT /combos/:id/slots`; UI = combo cards grouped by `grp` under the role
+sections. Present-to-client per combo feeds task 7.
 
 Front-end mapping: **Cattle Call** = `casting_candidates` for the project; **Selects** =
 `casting_assignments` grouped by role. The UI's per-candidate `{role: status}` map is just that
