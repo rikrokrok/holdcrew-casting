@@ -17,6 +17,7 @@ module.exports = {
   roleId:       () => 'ro_' + rand(9),
   candidateId:  () => 'c_' + rand(10),
   assignmentId: () => 'a_' + rand(10),
+  mediaId:      () => 'm_' + rand(10),
   shareToken:   () => rand(22),
   rand,
 };

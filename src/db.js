@@ -118,6 +118,44 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sends_project ON casting_sends(project_id);
 `);
 
+// Casting/slate number (freeform: "12" or "a01"). Added after first ship, so
+// migrate the live table. Idempotent.
+if (!db.prepare('PRAGMA table_info(casting_candidates)').all().some((c) => c.name === 'number')) {
+  db.exec('ALTER TABLE casting_candidates ADD COLUMN number TEXT');
+}
+
+// Media files (casting tapes / headshots). A candidate has MANY takes, not one,
+// so tapes live here (one row per file) rather than a single tape_key column.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS casting_media (
+    id           TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL REFERENCES casting_candidates(id) ON DELETE CASCADE,
+    tenant       TEXT NOT NULL,
+    project_id   TEXT NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'tape',   -- tape | headshot
+    key          TEXT NOT NULL,                  -- Wasabi object key
+    label        TEXT,                           -- e.g. "Slate", "Scene 1", "Take 2"
+    ord          INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_media_candidate ON casting_media(candidate_id);
+  CREATE INDEX IF NOT EXISTS idx_media_project ON casting_media(project_id);
+`);
+
+// Migrate the legacy single tape_key -> a casting_media 'Take 1' row. Idempotent
+// (skips a candidate whose tape_key is already represented).
+{
+  const legacy = db.prepare("SELECT id, tenant, project_id, tape_key FROM casting_candidates WHERE tape_key IS NOT NULL AND tape_key <> ''").all();
+  const has = db.prepare('SELECT 1 FROM casting_media WHERE candidate_id = ? AND key = ?');
+  const ins = db.prepare("INSERT INTO casting_media (id, candidate_id, tenant, project_id, kind, key, label, ord) VALUES (?, ?, ?, ?, 'tape', ?, 'Take 1', 0)");
+  const crypto = require('crypto');
+  let n = 0;
+  for (const r of legacy) {
+    if (!has.get(r.id, r.tape_key)) { ins.run('m_' + crypto.randomBytes(8).toString('hex').slice(0, 10), r.id, r.tenant, r.project_id, r.tape_key); n++; }
+  }
+  if (n) console.log(`[migrate] moved ${n} legacy tape_key -> casting_media`);
+}
+
 // Dev tenant so local dev / boot check is testable before the real HoldCrew-
 // company seeding (task 2). Password stays NULL (locked) unless CASTING_PASSWORD
 // seeds it, mirroring reels' one-time password seed.

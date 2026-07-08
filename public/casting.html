@@ -49,10 +49,18 @@
     .cc-photo { position: relative; width: 100%; aspect-ratio: 3 / 4; background: var(--surface-raised); display: block; }
     .cc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .cc-photo__video { position: absolute; left: 8px; bottom: 8px; }
+    .cc-num { position: absolute; top: 8px; left: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: #000; background: var(--amber); border-radius: 5px; padding: 2px 7px; letter-spacing: 0.03em; }
     .cc-body { padding: 10px 12px 12px; }
     .cc-name { font-size: 15px; color: var(--text); font-weight: 500; line-height: 1.2; }
     .cc-pronouns { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 1px; min-height: 12px; }
-    .cc-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+    .cc-roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; align-items: center; }
+    .cc-roleitem { display: inline-flex; align-items: center; gap: 3px; }
+    /* inline role toggle — assign/unassign straight from the card, no drawer */
+    .cc-rt { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--subtle); background: none; cursor: pointer; white-space: nowrap; }
+    .cc-rt:hover { border-color: var(--amber); color: var(--amber); }
+    .cc-rt.on { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 600; }
+    .cc-rt.on.book { background: var(--green); border-color: var(--green); }
+    .cc-noroles { font-family: var(--font-mono); font-size: 9px; color: var(--muted); font-style: italic; }
     .cc-rolechip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; color: var(--subtle); }
 
     /* ── SELECTS (role-based) ── */
@@ -96,6 +104,10 @@
     .dr-pronouns { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 3px 0 12px; }
     .dr-close { background: none; border: none; color: var(--subtle); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px; }
     .dr-close:hover { color: var(--amber); }
+    .dr-numrow { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .dr-numlabel { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .dr-num { width: 84px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--amber); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 9px; letter-spacing: 0.04em; }
+    .dr-num:focus { outline: none; border-color: var(--amber); }
 
     .dr-sec { padding: 16px 18px; border-bottom: 1px solid var(--border-inner); }
     .dr-sec:last-child { border-bottom: none; }
@@ -135,6 +147,10 @@
     .lb-cap { margin-top: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text); }
     .lb-close { position: absolute; top: 18px; right: 22px; color: var(--subtle); font-size: 26px; cursor: pointer; background: none; border: none; }
     .lb-close:hover { color: var(--amber); }
+    .lb-takes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+    .lb-take { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--subtle); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+    .lb-take:hover { color: var(--text); border-color: var(--subtle); }
+    .lb-take.on { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 600; }
 
     .cast-empty { text-align: center; padding: 3rem 1.5rem; }
     .cast-empty p { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); }
@@ -302,16 +318,27 @@
       return actions + `<div class="cc-grid">${cands.map(generalCard).join('')}</div>`;
     }
     function generalCard(c) {
-      const roleIds = Object.keys(c.assignments || {});
-      const rolesHtml = roleIds.length
-        ? roleIds.map(rid => { const r = roleById(rid); return `<span class="cc-rolechip">${esc(r ? r.name : '—')}</span>${statusBadge(c.assignments[rid])}`; }).join(' ')
-        : `<span class="badge badge--unassigned">Unassigned</span>`;
-      const video = c.hasTape
-        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>Tape</span>`
+      const asg = c.assignments || {};
+      // Inline role toggles — one per defined role; tap to assign/unassign right
+      // here (no drawer). When assigned, the status badge shows how far along.
+      const rolesHtml = roles.length
+        ? roles.map(r => {
+            const on = r.id in asg;
+            const st = on ? asg[r.id] : '';
+            return `<span class="cc-roleitem">
+              <button class="cc-rt${on ? ' on' : ''}${st==='booked' ? ' book' : ''}" onclick="event.stopPropagation();quickToggleRole('${c.id}','${r.id}')">${esc(r.name)}</button>
+              ${on && st !== 'shortlist' ? statusBadge(st) : ''}
+            </span>`;
+          }).join('')
+        : `<span class="cc-noroles">Add roles on the Selects tab to assign</span>`;
+      const nt = (c.tapes || []).length;
+      const video = nt
+        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' tapes' : 'Tape'}</span>`
         : `<span class="vchip vchip--none">No tape</span>`;
       return `<div class="cc-card" onclick="openDrawer('${c.id}')">
         <div class="cc-photo">
           <img src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
+          ${c.number ? `<div class="cc-num">${esc(c.number)}</div>` : ''}
           <div class="cc-photo__video">${video}</div>
         </div>
         <div class="cc-body">
@@ -320,6 +347,22 @@
           <div class="cc-roles">${rolesHtml}</div>
         </div>
       </div>`;
+    }
+
+    // Assign/unassign a candidate to a role straight from a General Call card.
+    // No drawer — optimistic local update, then re-render both tabs.
+    async function quickToggleRole(id, roleId) {
+      const c = byId(id); if (!c) return;
+      c.assignments = c.assignments || {};
+      const on = roleId in c.assignments;
+      try {
+        if (on) { await api.send('DELETE', '/api/casting/assignments', { candidateId: id, roleId }); delete c.assignments[roleId]; }
+        else { const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId }); c.assignments[roleId] = (res && res.status) || 'shortlist'; }
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert('Could not update the role.');
+      }
     }
 
     // ── SELECTS (role-based) ──
@@ -356,8 +399,9 @@
       </div>`;
     }
     function selRow(c, roleId) {
-      const video = c.hasTape
-        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>Tape</span>`
+      const nt = (c.tapes || []).length;
+      const video = nt
+        ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' tapes' : 'Tape'}</span>`
         : `<span class="vchip vchip--none">No tape</span>`;
       return `<div class="sel-row" onclick="openDrawer('${c.id}')">
         <img class="sel-thumb" src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
@@ -402,8 +446,9 @@
       document.getElementById('dr-back').classList.add('hidden');
     }
     function drawerHtml(c) {
-      const video = c.hasTape
-        ? `<span class="vchip" onclick="openVideo('${c.id}')"><span class="vchip__play">▶</span>Casting tape</span>`
+      const nt = (c.tapes || []).length;
+      const video = nt
+        ? `<span class="vchip" onclick="openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' casting tapes' : 'Casting tape'}</span>`
         : `<span class="vchip vchip--none">No tape submitted</span>`;
       const asg = c.assignments || {};
       const roleRows = roles.map(r => {
@@ -435,6 +480,10 @@
                 <div class="dr-pronouns">${esc(c.pronouns)||'&nbsp;'}</div>
               </div>
               <button class="dr-close" onclick="closeDrawer()">&times;</button>
+            </div>
+            <div class="dr-numrow">
+              <span class="dr-numlabel">No.</span>
+              <input class="dr-num" value="${esc(c.number||'')}" placeholder="—" maxlength="12" onchange="setNumber('${c.id}', this.value)">
             </div>
             ${video}
           </div>
@@ -498,11 +547,25 @@
         alert('Could not update the status.');
       }
     }
+    async function setNumber(id, value) {
+      const c = byId(id); if (!c) return;
+      const v = value.trim();
+      if (v === (c.number || '')) return;
+      try {
+        await api.send('PUT', '/api/casting/candidates/' + id, { number: v });
+        c.number = v;
+        render();
+      } catch (e) {
+        if (e.message === 'auth') return;
+        alert('Could not save the number.');
+      }
+    }
 
     // ── CSV import ──────────────────────────────────────────────
     // Target fields + a heuristic to auto-detect each from the CSV header row.
     const IMPORT_FIELDS = [
       { key:'name',       label:'Name *',       m: h => /name/.test(h) && !/agent|agency|role|char|user/.test(h) },
+      { key:'number',     label:'Number',       m: h => /number|slate|cast.*no|^#$|^no\.?$/.test(h) },
       { key:'pronouns',   label:'Pronouns',     m: h => /pronoun/.test(h) },
       { key:'email',      label:'Email',        m: h => /e-?mail/.test(h) && !/agent/.test(h) },
       { key:'phone',      label:'Phone',        m: h => /(phone|mobile|cell)/.test(h) && !/agent/.test(h) },
@@ -592,7 +655,7 @@
       const candidates = impRows.map(r => {
         const name = (r[ni] || '').trim(); if (!name) return null;
         return {
-          name, pronouns: cell(r,'pronouns'), email: cell(r,'email'), phone: cell(r,'phone'),
+          name, number: cell(r,'number'), pronouns: cell(r,'pronouns'), email: cell(r,'email'), phone: cell(r,'phone'),
           agency: cell(r,'agency'), agent: cell(r,'agent'), agentEmail: cell(r,'agentEmail'), agentPhone: cell(r,'agentPhone'),
           height: cell(r,'height'), weight: cell(r,'weight'), hair: cell(r,'hair'), eyes: cell(r,'eyes'), union: cell(r,'union'),
           avail: { travel: cell(r,'travel'), fitting: cell(r,'fitting'), shoot: cell(r,'shoot') },
@@ -612,15 +675,30 @@
       }
     }
 
-    // ── video lightbox ──
+    // ── video lightbox (playlist across an actor's takes) ──
+    let lbCand = null, lbIdx = 0;
     function openVideo(id) {
       const c = byId(id); if (!c) return;
-      const inner = document.getElementById('lb-inner');
-      const frame = c.tapeKey
-        ? `<video controls autoplay playsinline src="/api/casting/media?key=${encodeURIComponent(c.tapeKey)}"></video>`
-        : `<div class="lb-frame"><div>▶</div><div>No casting tape uploaded yet</div></div>`;
-      inner.innerHTML = `${c.tapeKey ? `<div class="lb-frame">${frame}</div>` : frame}<div class="lb-cap">${esc(c.name)} — casting tape</div>`;
+      lbCand = c; lbIdx = 0;
+      renderLightbox();
       document.getElementById('lightbox').classList.remove('hidden');
+    }
+    function setTake(i) { lbIdx = i; renderLightbox(); }
+    function renderLightbox() {
+      const c = lbCand; if (!c) return;
+      const tapes = c.tapes || [];
+      const inner = document.getElementById('lb-inner');
+      if (!tapes.length) {
+        inner.innerHTML = `<div class="lb-frame"><div>▶</div><div>No casting tape uploaded yet</div></div><div class="lb-cap">${esc(c.name)}</div>`;
+        return;
+      }
+      const t = tapes[lbIdx] || tapes[0];
+      const label = t.label || ('Take ' + (lbIdx + 1));
+      const takes = tapes.length > 1
+        ? `<div class="lb-takes">${tapes.map((tp, i) => `<button class="lb-take${i === lbIdx ? ' on' : ''}" onclick="setTake(${i})">${esc(tp.label || ('Take ' + (i + 1)))}</button>`).join('')}</div>`
+        : '';
+      inner.innerHTML = `<div class="lb-frame"><video controls autoplay playsinline src="/api/casting/media?key=${encodeURIComponent(t.key)}"></video></div>
+        <div class="lb-cap">${esc(c.name)}${c.number ? ` · #${esc(c.number)}` : ''} — ${esc(label)}</div>${takes}`;
     }
     function closeVideo(e) {
       if (e && e.target.tagName === 'VIDEO') return;

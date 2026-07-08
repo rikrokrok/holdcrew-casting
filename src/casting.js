@@ -9,7 +9,7 @@
 const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
-const { projectId, roleId, candidateId, assignmentId } = require('./ids');
+const { projectId, roleId, candidateId, assignmentId, mediaId } = require('./ids');
 
 const router = express.Router();
 
@@ -40,6 +40,7 @@ function toCand(row) {
   return {
     id: row.id,
     name: row.name,
+    number: row.number || '',
     pronouns: row.pronouns || '',
     email: row.email || '',
     phone: row.phone || '',
@@ -55,17 +56,21 @@ function toCand(row) {
     avail: { travel: row.avail_travel || '', fitting: row.avail_fitting || '', shoot: row.avail_shoot || '' },
     note: row.note || '',
     headshotKey: row.headshot_key || null,
-    tapeKey: row.tape_key || null,
-    hasTape: !!row.tape_key,
+    tapes: [],                 // filled by the board from casting_media
     source: row.source || null,
   };
 }
+
+// Tapes for a candidate (ordered), shaped for the front-end.
+const qTapes = db.prepare("SELECT id, key, label FROM casting_media WHERE candidate_id = ? AND kind = 'tape' ORDER BY ord, created_at");
+const tapesFor = (candId) => qTapes.all(candId).map((m) => ({ id: m.id, key: m.key, label: m.label || '' }));
 
 // API body -> column map. Only keys present in `body` are returned (partial-safe).
 function fromBody(body) {
   const out = {};
   const set = (col, val) => { if (val !== undefined) out[col] = val === null ? null : String(val); };
   set('name', body.name);
+  set('number', body.number);
   set('pronouns', body.pronouns);
   set('email', body.email);
   set('phone', body.phone);
@@ -105,8 +110,30 @@ router.get('/board', (req, res) => {
   res.json({
     project: { id: p.id, job: p.job, title: p.title },
     roles,
-    candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {} })),
+    candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {}, tapes: tapesFor(c.id) })),
   });
+});
+
+// ── Candidate media (tapes) — attach / list / remove ─────────────────────────
+router.post('/candidates/:id/media', (req, res) => {
+  const cand = qCand.get(req.params.id, eff(req));
+  if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
+  const key = String(req.body?.key || '').trim();
+  if (!key) return res.status(400).json({ error: 'key_required' });
+  const kind = req.body?.kind === 'headshot' ? 'headshot' : 'tape';
+  const label = String(req.body?.label || '').trim();
+  const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_media WHERE candidate_id = ? AND kind = ?').get(cand.id, kind).n;
+  const id = mediaId();
+  db.prepare('INSERT INTO casting_media (id, candidate_id, tenant, project_id, kind, key, label, ord) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, cand.id, eff(req), cand.project_id, kind, key, label || null, ord);
+  res.status(201).json({ id, key, label, kind, ord });
+});
+
+router.delete('/media/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM casting_media WHERE id = ? AND tenant = ?').get(req.params.id, eff(req));
+  if (!row) return res.status(404).json({ error: 'media_not_found' });
+  db.prepare('DELETE FROM casting_media WHERE id = ?').run(row.id);
+  res.status(204).end();
 });
 
 // ── Roles ────────────────────────────────────────────────────────────────────
