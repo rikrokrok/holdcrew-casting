@@ -51,6 +51,11 @@
     .cc-photo { position: relative; width: 100%; aspect-ratio: 3 / 4; background: var(--surface-raised); display: block; }
     .cc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .cc-photo__video { position: absolute; left: 8px; bottom: 8px; }
+    .cc-cam { position: absolute; top: 6px; right: 6px; border: none; background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; line-height: 1; padding: 4px 6px; border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity 0.12s; }
+    .cc-card:hover .cc-cam { opacity: 1; }
+    .cc-photo.is-empty .cc-cam { opacity: 0.9; }
+    .cc-photo.dz-over { outline: 2px dashed var(--amber); outline-offset: -2px; }
+    .cc-photo.dz-over::after { content: 'Drop photo'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #000; background: rgba(245,166,35,0.82); }
     .cc-num { position: absolute; top: 8px; left: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: #000; background: var(--amber); border-radius: 5px; padding: 2px 7px; letter-spacing: 0.03em; }
     .cc-body { padding: 8px 10px 10px; }
     .cc-name { font-size: 13.5px; color: var(--text); font-weight: 500; line-height: 1.2; }
@@ -101,7 +106,14 @@
     .hidden { display: none; }
     .drawer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: 100%; max-width: 560px; overflow: hidden; }
     .dr-top { display: flex; gap: 16px; padding: 18px; border-bottom: 1px solid var(--border); }
-    .dr-photo { width: 132px; aspect-ratio: 3/4; border-radius: 8px; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; }
+    .dr-photo { width: 132px; aspect-ratio: 3/4; border-radius: 8px; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; display: block; }
+    .dr-photo-wrap { position: relative; width: 132px; flex-shrink: 0; cursor: pointer; border-radius: 8px; }
+    .dr-photo-wrap .dr-photo { width: 100%; }
+    .dr-photo__edit { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 0 0 8px 8px; opacity: 0; transition: opacity 0.12s; }
+    .dr-photo-wrap:hover .dr-photo__edit, .dr-photo-wrap.is-empty .dr-photo__edit { opacity: 1; }
+    .dr-photo-wrap.is-empty { outline: 1px dashed var(--dim); }
+    .dr-photo-wrap.dz-over { outline: 2px dashed var(--amber); }
+    .dr-photo-wrap.dz-over .dr-photo__edit { opacity: 1; background: rgba(245,166,35,0.85); color: #000; }
     .dr-head { flex: 1; min-width: 0; }
     .dr-name { font-family: var(--font-display); font-size: 30px; letter-spacing: 0.03em; color: var(--text); line-height: 0.95; }
     .dr-pronouns { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 3px 0 12px; }
@@ -241,7 +253,7 @@
     @media (max-width: 600px) {
       .cc-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
       .dr-top { flex-direction: column; }
-      .dr-photo { width: 120px; }
+      .dr-photo, .dr-photo-wrap { width: 120px; }
       .detail-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -352,12 +364,15 @@
     const roleById = id => roles.find(r => r.id === id);
     const comboById = id => combos.find(c => c.id === id);
 
-    // Headshot: real headshots (Wasabi) arrive with the media slice; until then a
-    // stable placeholder avatar keyed on the name so cards aren't blank.
+    // Headshot: real uploaded headshot (Wasabi, presigned via /media) when set,
+    // else a stable placeholder avatar keyed on the name so cards aren't blank.
+    // _hsv busts the browser cache after a replace within the session.
     function photoUrl(c) {
-      const seed = encodeURIComponent((c.name || '').trim());
+      if (c && c.headshotKey) return `/api/casting/media?key=${encodeURIComponent(c.headshotKey)}${c._hsv ? '&v=' + c._hsv : ''}`;
+      const seed = encodeURIComponent(((c && c.name) || '').trim());
       return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
     }
+    const isPlaceholder = c => !(c && c.headshotKey);
 
     async function loadBoard() {
       const el = document.getElementById('cast-body');
@@ -420,9 +435,10 @@
         ? `<span class="vchip" onclick="event.stopPropagation();openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' tapes' : 'Tape'}</span>`
         : `<span class="vchip vchip--none">No tape</span>`;
       return `<div class="cc-card" onclick="openDrawer('${c.id}')">
-        <div class="cc-photo">
+        <div class="cc-photo ${isPlaceholder(c)?'is-empty':''}" ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="onPhotoDrop(event,'${c.id}')">
           <img src="${esc(photoUrl(c))}" alt="${esc(c.name)}" loading="lazy">
           ${c.number ? `<div class="cc-num">${esc(c.number)}</div>` : ''}
+          <button class="cc-cam" title="Set headshot" onclick="event.stopPropagation();pickHeadshot('${c.id}')">📷</button>
           <div class="cc-photo__video">${video}</div>
         </div>
         <div class="cc-body">
@@ -717,7 +733,10 @@
 
       return `
         <div class="dr-top">
-          <img class="dr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
+          <div class="dr-photo-wrap ${isPlaceholder(c)?'is-empty':''}" onclick="pickHeadshot('${c.id}')" ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="onPhotoDrop(event,'${c.id}')" title="Click or drop an image to set the headshot">
+            <img class="dr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
+            <span class="dr-photo__edit">${isPlaceholder(c)?'Add photo':'Change'}</span>
+          </div>
           <div class="dr-head">
             <div style="display:flex;align-items:flex-start;">
               <div style="flex:1;min-width:0;">
@@ -832,6 +851,39 @@
       el.className = 'cast-toast show' + (warn ? ' warn' : '');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => { el.className = 'cast-toast'; }, warn ? 6500 : 3500);
+    }
+
+    // ── headshots: the photo IS the identifier, so real faces matter everywhere.
+    // Upload the raw image body straight to Wasabi (drawer photo or drop on a card).
+    async function uploadHeadshot(candId, file) {
+      const c = byId(candId); if (!c) return;
+      if (!file || !/^image\//.test(file.type)) { toast('Please choose an image file.', true); return; }
+      if (file.size > 20 * 1024 * 1024) { toast('Image is over 20 MB — pick a smaller one.', true); return; }
+      toast('Uploading headshot…');
+      try {
+        const r = await fetch(`/api/casting/candidates/${candId}/headshot`, { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+        if (r.status === 401) { toLogin(); return; }
+        if (!r.ok) throw new Error('http_' + r.status);
+        const j = await r.json();
+        c.headshotKey = j.headshotKey;
+        c._hsv = Date.now();  // cache-bust the <img> after a replace
+        if (!document.getElementById('dr-back').classList.contains('hidden')) openDrawer(candId);
+        render();
+        toast('Headshot updated.');
+      } catch (e) { toast('Could not upload the headshot.', true); }
+    }
+    function pickHeadshot(candId) {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = () => { if (inp.files && inp.files[0]) uploadHeadshot(candId, inp.files[0]); };
+      inp.click();
+    }
+    function dzOver(e) { e.preventDefault(); e.currentTarget.classList.add('dz-over'); }
+    function dzLeave(e) { e.currentTarget.classList.remove('dz-over'); }
+    function onPhotoDrop(e, candId) {
+      e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('dz-over');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) uploadHeadshot(candId, f);
     }
     async function setNumber(id, value) {
       const c = byId(id); if (!c) return;

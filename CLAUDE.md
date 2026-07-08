@@ -44,9 +44,13 @@ variant. Slots are filled via a **photo picker** (tap a slot → face grid of th
 face; casting is visual, so pick by photo not name — Eric 2026-07-08). Tables `casting_combos` +
 `casting_combo_slots`; `src/casting.js` combo routes; combo cards under the role sections on the Selects
 tab. Present-to-client per combo = task 7 stub.
-**NOT DONE:** media/Wasabi (task 6 — tapes seeded, upload UI pending), CSV import UI polish, client
-presentation (task 7 — incl. combo lookbook), job.html tile (task 9, decoupled), drawer single-role
-simplification, combo slot drag-to-fill (v1 uses the tap-a-face photo picker).
+**Headshot upload — DONE 2026-07-08:** real headshots now show everywhere (`photoUrl()` → presigned
+Wasabi via `/media`, placeholder fallback). Upload = raw image body → `wasabi.uploadBuffer` → key
+`<tenant>/<job>/<cand>/headshot-<rand>.<ext>` → `headshot_key`; `POST /candidates/:id/headshot`. UI:
+click/drop the drawer photo, drag-drop + 📷 on General Call cards. Verified incl. tenant isolation (403).
+**NOT DONE:** self-serve *tape* upload UI (seed script only) + folder/bulk headshot ingestion (task 6
+remainder), CSV import UI polish, client presentation (task 7 — incl. combo lookbook), job.html tile
+(task 9, decoupled), drawer single-role simplification, combo slot drag-to-fill (photo picker covers v1).
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 

@@ -34,8 +34,16 @@ async function uploadObject(key, filePath, contentType = 'application/octet-stre
   }));
 }
 
+// In-memory upload (headshots arrive as a raw request body Buffer — no temp file).
+async function uploadBuffer(key, buffer, contentType = 'application/octet-stream') {
+  await s3().send(new PutObjectCommand({
+    Bucket: wasabi.bucket, Key: key, Body: buffer,
+    ContentLength: buffer.length, ContentType: contentType,
+  }));
+}
+
 async function deleteObject(key) {
   await s3().send(new DeleteObjectCommand({ Bucket: wasabi.bucket, Key: key }));
 }
 
-module.exports = { presignKey, uploadObject, deleteObject };
+module.exports = { presignKey, uploadObject, uploadBuffer, deleteObject };

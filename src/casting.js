@@ -10,7 +10,8 @@ const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
 const holdcrew = require('./holdcrew');
-const { projectId, roleId, candidateId, assignmentId, mediaId, comboId, comboSlotId } = require('./ids');
+const { mediaKey } = require('./tenant');
+const { projectId, roleId, candidateId, assignmentId, mediaId, comboId, comboSlotId, rand } = require('./ids');
 
 const router = express.Router();
 
@@ -163,6 +164,31 @@ router.delete('/media/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'media_not_found' });
   db.prepare('DELETE FROM casting_media WHERE id = ?').run(row.id);
   res.status(204).end();
+});
+
+// ── Headshot upload — the raw image body streams straight to Wasabi ──────────
+// The photo IS the identifier in casting, so this is core. Key includes a random
+// so each upload is a fresh URL (no stale-cache on replace); the old object is
+// deleted. Tenant-scoped key (mediaKey) satisfies the /media presign guard.
+const rawImage = express.raw({ type: ['image/*'], limit: '20mb' });
+router.post('/candidates/:id/headshot', rawImage, async (req, res) => {
+  const t = eff(req);
+  const cand = qCand.get(req.params.id, t);
+  if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
+  const buf = req.body;
+  if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'empty_body' });
+  const ct = (req.headers['content-type'] || 'image/jpeg').toLowerCase().split(';')[0];
+  const ext = ct.endsWith('png') ? 'png' : ct.endsWith('webp') ? 'webp' : ct.endsWith('gif') ? 'gif' : 'jpg';
+  const project = db.prepare('SELECT job FROM casting_projects WHERE id = ?').get(cand.project_id);
+  const key = mediaKey(t, project.job, cand.id, `headshot-${rand(6)}.${ext}`);
+  try {
+    await wasabi.uploadBuffer(key, buf, ct);
+    if (cand.headshot_key && cand.headshot_key !== key) { try { await wasabi.deleteObject(cand.headshot_key); } catch (e) { /* orphan, non-fatal */ } }
+    db.prepare("UPDATE casting_candidates SET headshot_key = ?, updated_at = datetime('now') WHERE id = ?").run(key, cand.id);
+    res.status(201).json({ ok: true, headshotKey: key });
+  } catch (e) {
+    res.status(502).json({ error: 'upload_failed', detail: e.message });
+  }
 });
 
 // ── Roles ────────────────────────────────────────────────────────────────────

@@ -219,8 +219,14 @@ Wasabi via short-lived presigned URLs.
 4. **Front-end** — move `casting.html` into the service, replace the DATA SEAM with the real API
    (two tabs, drawer, lifecycle already built).
 5. **CSV/Fillout importer** — upsert by normalised name; ingest the real export.
-6. **Media** — `WASABI_CASTING_BUCKET` config + `presignKey`; headshot + tape upload; wire the tape
-   lightbox to real playback; (transcode decision).
+6. **Media** — `WASABI_CASTING_BUCKET` + `presignKey` DONE; tape playback lightbox DONE (14 seeded).
+   **Headshot upload ✅ DONE (2026-07-08):** raw-image body → `wasabi.uploadBuffer` → Wasabi key
+   `<tenant>/<job>/<cand>/headshot-<rand>.<ext>` → `casting_candidates.headshot_key`; `POST
+   /candidates/:id/headshot`. `photoUrl()` now serves the real headshot (presigned via `/media`)
+   everywhere — cards, drawer, face picker, combos — falling back to the name-seeded placeholder. UI:
+   click/drop on the drawer photo, drag-drop + 📷 button on General Call cards; unique key per upload
+   busts cache + deletes the old object. **Still pending:** self-serve *tape* upload UI (only a seed
+   script today), folder/bulk headshot ingestion (drop many, match by name), transcode-to-spec decision.
 7. **Client presentation** — `casting_sends` token → passive public page (Select-tier).
 8. **Hold / Book → promote** — ✅ **DONE (2026-07-08).** Reuses HoldCrew's `v3-talent-save` webhook
    (idempotent upsert by name+job); **one slug** (casting tenant slug = HoldCrew company slug), per-tenant
