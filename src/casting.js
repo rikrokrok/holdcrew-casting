@@ -6,6 +6,9 @@
 // Shape returned to the front-end (see casting.html): a board =
 //   { project, roles:[{id,name,character,ord}],
 //     candidates:[{...fields, assignments:{ <roleId>: status }}] }
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
@@ -74,6 +77,9 @@ function toCand(row) {
     union: row.union_status || '',
     avail: { travel: row.avail_travel || '', fitting: row.avail_fitting || '', shoot: row.avail_shoot || '' },
     note: row.note || '',
+    sessionFee: row.session_fee || '',
+    usageFee: row.usage_fee || '',
+    usageTerms: row.usage_terms || '',
     headshotKey: row.headshot_key || null,
     tapes: [],                 // filled by the board from casting_media
     source: row.source || null,
@@ -111,6 +117,9 @@ function fromBody(body) {
   set('hair', body.hair);
   set('eyes', body.eyes);
   set('union_status', body.union);
+  set('session_fee', body.sessionFee);
+  set('usage_fee', body.usageFee);
+  set('usage_terms', body.usageTerms);
   if (body.avail !== undefined) {
     set('avail_travel', body.avail?.travel ?? null);
     set('avail_fitting', body.avail?.fitting ?? null);
@@ -189,6 +198,48 @@ router.post('/candidates/:id/headshot', rawImage, async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: 'upload_failed', detail: e.message });
   }
+});
+
+// ── Tape (self-tape / take) upload — video streams to a temp file then Wasabi ─
+// Videos are big, so we stream to disk (not buffer in memory) and add a
+// casting_media 'tape' row (a candidate has MANY takes). ?label names the take.
+router.post('/candidates/:id/tape', (req, res) => {
+  const t = eff(req);
+  const cand = qCand.get(req.params.id, t);
+  if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
+  let ct = (req.headers['content-type'] || '').toLowerCase().split(';')[0];
+  if (!ct || ct === 'application/octet-stream') ct = 'video/mp4';
+  if (!/^video\//.test(ct)) return res.status(415).json({ error: 'not_video' });
+  const ext = ct.includes('quicktime') ? 'mov' : ct.includes('webm') ? 'webm' : ct.includes('m4v') ? 'm4v' : 'mp4';
+  const label = String(req.query.label || '').trim().slice(0, 60);
+  const project = db.prepare('SELECT job FROM casting_projects WHERE id = ?').get(cand.project_id);
+  const ord = db.prepare("SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_media WHERE candidate_id = ? AND kind = 'tape'").get(cand.id).n;
+  const key = mediaKey(t, project.job, cand.id, `take-${ord + 1}-${rand(4)}.${ext}`);
+  const tmp = path.join(os.tmpdir(), `cast-tape-${cand.id}-${Date.now()}.${ext}`);
+  const ws = fs.createWriteStream(tmp);
+  let done = false;
+  const cleanup = () => { try { fs.existsSync(tmp) && fs.unlinkSync(tmp); } catch (e) {} };
+  const fail = (code, err) => { if (done) return; done = true; try { ws.destroy(); } catch (e) {} cleanup(); res.status(code).json({ error: err }); };
+  req.on('error', () => fail(400, 'stream_error'));
+  ws.on('error', () => fail(500, 'write_error'));
+  ws.on('finish', async () => {
+    if (done) return;
+    try {
+      if (!fs.statSync(tmp).size) return fail(400, 'empty_body');
+      await wasabi.uploadObject(key, tmp, ct);
+      const id = mediaId();
+      const lbl = label || `Take ${ord + 1}`;
+      db.prepare("INSERT INTO casting_media (id, candidate_id, tenant, project_id, kind, key, label, ord) VALUES (?, ?, ?, ?, 'tape', ?, ?, ?)")
+        .run(id, cand.id, t, cand.project_id, key, lbl, ord);
+      done = true;
+      res.status(201).json({ id, key, label: lbl, ord });
+    } catch (e) {
+      fail(502, 'upload_failed');
+    } finally {
+      cleanup();
+    }
+  });
+  req.pipe(ws);
 });
 
 // ── Roles ────────────────────────────────────────────────────────────────────
@@ -341,6 +392,8 @@ async function commitToRole(req, res, castingStatus, holdStatus) {
     agentPhone: cand.agent_phone || '',
     union: cand.union_status || '',
     notes: cand.note || '',
+    sessionCost: cand.session_fee || '',   // usage/buyout/fees ride along (placeholder)
+    usageCost: cand.usage_fee || '',
     status: holdStatus,
   };
   try {

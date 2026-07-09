@@ -124,6 +124,15 @@ if (!db.prepare('PRAGMA table_info(casting_candidates)').all().some((c) => c.nam
   db.exec('ALTER TABLE casting_candidates ADD COLUMN number TEXT');
 }
 
+// Usage / buyout / fees — captured at booking, feed HoldCrew Talent (session &
+// usage costs). Placeholder for now (editable + persisted; ride along at Book via
+// v3-talent-save's sessionCost/usageCost columns). Idempotent.
+for (const col of ['session_fee', 'usage_fee', 'usage_terms']) {
+  if (!db.prepare('PRAGMA table_info(casting_candidates)').all().some((c) => c.name === col)) {
+    db.exec(`ALTER TABLE casting_candidates ADD COLUMN ${col} TEXT`);
+  }
+}
+
 // HoldCrew linkage: a Held/Booked candidate is promoted into that company's
 // HoldCrew Job Log via the v3-talent-save webhook, which authenticates with the
 // company's registry slug + token. ONE slug — the casting tenant slug IS the

@@ -48,9 +48,16 @@ tab. Present-to-client per combo = task 7 stub.
 Wasabi via `/media`, placeholder fallback). Upload = raw image body → `wasabi.uploadBuffer` → key
 `<tenant>/<job>/<cand>/headshot-<rand>.<ext>` → `headshot_key`; `POST /candidates/:id/headshot`. UI:
 click/drop the drawer photo, drag-drop + 📷 on General Call cards. Verified incl. tenant isolation (403).
-**NOT DONE:** self-serve *tape* upload UI (seed script only) + folder/bulk headshot ingestion (task 6
-remainder), CSV import UI polish, client presentation (task 7 — incl. combo lookbook), job.html tile
-(task 9, decoupled), drawer single-role simplification, combo slot drag-to-fill (photo picker covers v1).
+**Tape upload + bulk media import — DONE 2026-07-09:** `POST /candidates/:id/tape` (streamed video →
+Wasabi → `casting_media` take) with an Upload-tape button + per-take list in the drawer;
+`scripts/import-media.js <tenant> <job> <folder>` bulk-imports headshots/tapes matched by name (flat
+`"<Name>.jpg"`/`"<Name> - <label>.mp4"` or `"<Name>/…"` folders; idempotent, `--dry`). Usage/buyout/fee
+placeholder fields on the candidate (session_fee/usage_fee/usage_terms) shown in the drawer + ride along
+into Book/Hold (v3-talent-save sessionCost/usageCost). Upshot re-linked to HoldCrew `upshot` (Eric
+renamed v3→upshot; `v3` row lingers for an in-flight job — harmless for casting).
+**NOT DONE:** CSV import UI polish, client presentation (task 7 — incl. combo lookbook), job.html tile
+(task 9, decoupled), drawer single-role simplification, transcode-to-spec decision, combo review window
+(building next: click a combo → review + bulk Recommend/Hold).
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 

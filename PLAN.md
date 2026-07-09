@@ -225,8 +225,17 @@ Wasabi via short-lived presigned URLs.
    /candidates/:id/headshot`. `photoUrl()` now serves the real headshot (presigned via `/media`)
    everywhere — cards, drawer, face picker, combos — falling back to the name-seeded placeholder. UI:
    click/drop on the drawer photo, drag-drop + 📷 button on General Call cards; unique key per upload
-   busts cache + deletes the old object. **Still pending:** self-serve *tape* upload UI (only a seed
-   script today), folder/bulk headshot ingestion (drop many, match by name), transcode-to-spec decision.
+   busts cache + deletes the old object.
+   **Tape upload ✅ DONE (2026-07-09):** `POST /candidates/:id/tape?label=` streams the video body to a
+   temp file → `wasabi.uploadObject` → a `casting_media` 'tape' row (a candidate has many takes). UI: an
+   **Upload tape** button + a per-take list (play / remove) in the drawer's "Casting tapes" section.
+   **Bulk media import ✅ DONE (2026-07-09):** `scripts/import-media.js <tenant> <job> <folder>` — the
+   SFTP path (drop the casting house's folder, run it). Matches files to candidates **by name**; two
+   layouts (mixable): (A) flat files `"<Name>.jpg"` = headshot, `"<Name>.mp4"` = Take 1, `"<Name> -
+   <label>.mp4"` / `"<Name> (2).mp4"` = labelled/numbered takes; (B) a sub-folder per candidate
+   (`"<Name>/headshot.jpg"`, `"<Name>/*.mp4"`). Idempotent (skips existing headshot unless
+   `--replace-headshot`; skips a tape whose label already exists), `--dry` preview, unmatched reported.
+   **Still pending:** transcode-to-spec decision (store-as-is for now).
 7. **Client presentation** — `casting_sends` token → passive public page (Select-tier).
 8. **Hold / Book → promote** — ✅ **DONE (2026-07-08).** Reuses HoldCrew's `v3-talent-save` webhook
    (idempotent upsert by name+job); **one slug** (casting tenant slug = HoldCrew company slug), per-tenant

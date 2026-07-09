@@ -127,6 +127,25 @@
     .dr-sec { padding: 16px 18px; border-bottom: 1px solid var(--border-inner); }
     .dr-sec:last-child { border-bottom: none; }
     .dr-sec__label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .dr-sec__count { color: var(--amber); margin-left: 4px; }
+    .dr-sec__note { color: var(--dim); letter-spacing: 0.06em; margin-left: 4px; text-transform: none; }
+    /* tapes */
+    .tp-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 9px; }
+    .tp-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); }
+    .tp-play { background: none; border: none; color: var(--amber); cursor: pointer; font-size: 11px; flex-shrink: 0; }
+    .tp-label { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tp-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; flex-shrink: 0; }
+    .tp-del:hover { color: var(--red); }
+    .tp-empty { font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding: 4px 2px 9px; }
+    .tp-upload { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); background: none; border: 1px dashed var(--amber-dim); border-radius: var(--radius); padding: 7px 13px; cursor: pointer; }
+    .tp-upload:hover { background: rgba(245,166,35,0.08); }
+    /* usage & fees placeholder */
+    .fee-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
+    .fee-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .fee-item.fee-full { grid-column: 1 / -1; }
+    .fee-item span { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .fee-item input { font-family: var(--font-mono); font-size: 12px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; }
+    .fee-item input:focus { outline: none; border-color: var(--amber); }
 
     /* role assignment + per-role status inside drawer */
     .rolerow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-inner); }
@@ -731,6 +750,13 @@
         return `<span class="avail-tag ${v==='partial'?'partial':''}">${k[0].toUpperCase()+k.slice(1)}${v==='partial'?' (partial)':''}</span>`;
       }).filter(Boolean).join('');
 
+      const tapeMgmt = (c.tapes || []).map((tp, i) => `
+        <div class="tp-row">
+          <button class="tp-play" onclick="openVideo('${c.id}')" title="Play">▶</button>
+          <span class="tp-label">${esc(tp.label || ('Take ' + (i + 1)))}</span>
+          <button class="tp-del" title="Remove tape" onclick="deleteTape('${tp.id}','${c.id}')">✕</button>
+        </div>`).join('');
+
       return `
         <div class="dr-top">
           <div class="dr-photo-wrap ${isPlaceholder(c)?'is-empty':''}" onclick="pickHeadshot('${c.id}')" ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="onPhotoDrop(event,'${c.id}')" title="Click or drop an image to set the headshot">
@@ -756,6 +782,21 @@
         <div class="dr-sec">
           <div class="dr-sec__label">Consider for</div>
           ${roleRows}
+        </div>
+
+        <div class="dr-sec">
+          <div class="dr-sec__label">Casting tapes <span class="dr-sec__count">${(c.tapes||[]).length}</span></div>
+          <div class="tp-list">${tapeMgmt || '<div class="tp-empty">No tapes yet.</div>'}</div>
+          <button class="tp-upload" onclick="pickTape('${c.id}')">＋ Upload tape</button>
+        </div>
+
+        <div class="dr-sec">
+          <div class="dr-sec__label">Usage &amp; fees <span class="dr-sec__note">for booking · placeholder</span></div>
+          <div class="fee-grid">
+            <label class="fee-item"><span>Session fee</span><input value="${esc(c.sessionFee||'')}" placeholder="—" onchange="setField('${c.id}','sessionFee',this.value)"></label>
+            <label class="fee-item"><span>Buyout / usage</span><input value="${esc(c.usageFee||'')}" placeholder="—" onchange="setField('${c.id}','usageFee',this.value)"></label>
+            <label class="fee-item fee-full"><span>Usage terms — term / territory / exclusivity</span><input value="${esc(c.usageTerms||'')}" placeholder="—" onchange="setField('${c.id}','usageTerms',this.value)"></label>
+          </div>
         </div>
 
         <div class="dr-sec">
@@ -884,6 +925,50 @@
       e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('dz-over');
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) uploadHeadshot(candId, f);
+    }
+
+    // ── tapes: self-serve upload of a candidate's take(s) ──
+    function pickTape(candId) {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'video/*';
+      inp.onchange = () => { if (inp.files && inp.files[0]) uploadTape(candId, inp.files[0]); };
+      inp.click();
+    }
+    async function uploadTape(candId, file) {
+      const c = byId(candId); if (!c) return;
+      if (!file || !/^video\//.test(file.type || '')) { toast('Please choose a video file.', true); return; }
+      const label = (prompt('Label this take (optional — e.g. "Slate", "Scene 1"):') || '').trim();
+      toast('Uploading tape…');
+      try {
+        const r = await fetch(`/api/casting/candidates/${candId}/tape?label=${encodeURIComponent(label)}`, {
+          method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file,
+        });
+        if (r.status === 401) { toLogin(); return; }
+        if (!r.ok) throw new Error('http_' + r.status);
+        const m = await r.json();
+        c.tapes = c.tapes || []; c.tapes.push({ id: m.id, key: m.key, label: m.label || '' });
+        if (!document.getElementById('dr-back').classList.contains('hidden')) openDrawer(candId);
+        render();
+        toast('Tape uploaded.');
+      } catch (e) { toast('Could not upload the tape.', true); }
+    }
+    async function deleteTape(mediaId, candId) {
+      const c = byId(candId); if (!c) return;
+      if (!confirm('Remove this tape?')) return;
+      try {
+        await api.send('DELETE', '/api/casting/media/' + mediaId);
+        c.tapes = (c.tapes || []).filter(t => t.id !== mediaId);
+        if (!document.getElementById('dr-back').classList.contains('hidden')) openDrawer(candId);
+        render();
+      } catch (e) { if (e.message === 'auth') return; toast('Could not remove the tape.', true); }
+    }
+    // Generic single-field save on a candidate (used by the Usage & fees placeholder).
+    async function setField(id, field, value) {
+      const c = byId(id); if (!c) return;
+      const v = (value || '').trim();
+      if (v === (c[field] || '')) return;
+      try { await api.send('PUT', '/api/casting/candidates/' + id, { [field]: v }); c[field] = v; }
+      catch (e) { if (e.message === 'auth') return; toast('Could not save.', true); }
     }
     async function setNumber(id, value) {
       const c = byId(id); if (!c) return;
