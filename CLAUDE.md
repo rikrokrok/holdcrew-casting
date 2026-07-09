@@ -60,8 +60,15 @@ a modal showing the assembled cast big (role · photo · name · tape · status)
 the whole combo: **Recommend** (internal tier, assignment status), **Put on hold** / **Book** (write the
 HoldCrew Job Log via the per-actor hold/book endpoints, looped), plus Present (task 7 stub). Verified on
 test/LOTTERY (bulk recommend + hold-promotes-all).
-**NOT DONE:** CSV import UI polish, client presentation (task 7 — incl. combo lookbook), job.html tile
-(task 9, decoupled), drawer single-role simplification, transcode-to-spec decision.
+**⭐ NEXT — PIPELINE + PAGES REDESIGN (specced 2026-07-09, not built):** see PLAN.md §"Pipeline, Combos &
+Client Presentation — Design Spec". Replaces the single status with **three axes per person×role**
+(progress ticks Shortlist·Recco·Client-approved·Booked·Confirmed + rank Primary/Backup + disposition
+Pass/Unavailable), renames **Hold→Booked, Book→Confirmed**, keeps combos as pure UX grouping, and makes
+the client page a **curated, named, multi-instance "presentation page"** object (assign individuals/combos;
+pick the take shown; show/hide backups) — the fleshed-out task 7. Client stays passive; PM records every
+tick. Build order in the spec: (1) pipeline model + renames, (2) audit UI, (3) presentation pages.
+**NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
+simplification, transcode-to-spec decision.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 

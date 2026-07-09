@@ -101,6 +101,98 @@ Status is **per (candidate × role)** — a person can be Select for LEAD and Pa
 
 ---
 
+## Pipeline, Combos & Client Presentation — Design Spec (2026-07-09)
+
+Worked out with Eric over a long design pass; **this section is authoritative and supersedes the single
+"creative ladder" above and the old "Client presentation" section** where they differ. Not built yet —
+this is the blueprint. Real-world workflow it models:
+
+> director + agency like someone → **recco** them to the client → client **approves** (or picks
+> alternates) → we build a **booking list** → the CD **books** talent and **confirms** (or flags an
+> avail issue) → final list → **call sheet**.
+
+### 1. The talent pipeline — three independent axes (per person × role)
+
+Not a single advancing status. Each `(candidate × role)` assignment carries **three orthogonal axes**, so
+a PM can see the whole picture at a glance — including gaps (e.g. **Booked ✓ but Client-approved ✗**,
+which a single linear status would hide). This is the whole point: independently-settable, auditable.
+
+- **Progress** — five independent, individually-tickable, **timestamped** milestones:
+  `Shortlist · Recco · Client-approved · Booked · Confirmed`. Shown as a progress strip; a later tick set
+  with an earlier one empty **flags amber**. A derived "furthest stage" is kept for board grouping/sorting
+  so existing Selects/combo views keep working.
+  - **Shortlist** — director/agency like them (internal).
+  - **Recco** — recommend to the client (internal "client-worthy" pool; see §3 — does NOT auto-publish).
+  - **Client-approved** — the client greenlit them; **production records it** (client is passive).
+  - **Booked** — CD books / first-refusal — **pending, writes the Job Log row but stays OFF the call
+    sheet** (Hold Status blank). *(= today's "Hold" action, renamed.)*
+  - **Confirmed** — avail cleared, locked — **writes the Job Log row `Confirmed` → syncs to the call
+    sheet** via `v3-sync-talent`. *(= today's "Book" action, renamed.)*
+- **Rank** — `Primary | Backup`. A backup is an alternate for the role; it runs the *same* progress ticks
+  (a backup can be Client-approved as an approved fallback). Not a progress stage — a separate axis.
+- **Disposition** — `none | Pass | Unavailable`. **Unavailable** = the avail issue the CD flags; pairs
+  with Backup (primary goes Unavailable → promote the Backup to Primary, client already approved it).
+
+**Rename to apply:** `Hold → Booked`, `Book → Confirmed` (action + status value `hold→booked`,
+`booked→confirmed`). Plumbing unchanged: Booked writes the Job Log pending, Confirmed writes it Confirmed.
+
+### 2. Combos = UX grouping only (no state)
+
+A combo is a **grouping of individual reccos** assembled for presentation (a "family": one actor per
+role). **It carries no state of its own** — the individual is the atom; the combo is a container/view. A
+combo's bulk action (Recommend/Book/Confirm) is pure convenience: it applies to each member. The combo's
+whole payoff is the client page, where a family presents as one grouped block.
+
+### 3. Client presentation = curated **pages**, built by hand (NOT auto-generated)
+
+The client page is **not** an automatic dump of everyone who's recco'd — it's a **deliberately curated
+artifact**. (Killer tell: you choose *which take* the client watches, so it can't self-generate.) Two
+layers, kept separate:
+
+- **Internal pipeline** — all candidates, reccos, backups, ticks, every take. The producer's workspace;
+  never seen by the client.
+- **Presentation pages** — a **first-class, group-like object** (same "create → name → assign" motion as
+  combos, one level up): **create as many as you need, name each, assign individuals and/or combos.** Each
+  page = a **passive, tokenized client lookbook** (reels' send-builder lineage). Per page you curate:
+  which reccos are on it, **which take plays** for each person (choice lives on the *page × person*
+  membership, default a hero/latest take), whether each **Backup is shown or hidden**, family grouping,
+  and order. **Client never clicks** — they review, tell you off-platform, and **you record the approval**
+  back on the pipeline (Client-approved tick).
+
+### 4. Takes = always discrete files (settled)
+
+Casting footage always arrives as **discrete take files** (never one long session to clip) — so the
+existing `casting_media` tape model is correct: no clipper / in-out marking. "Pulling a take" for a page
+is just **picking which uploaded take file the client sees** on that page.
+
+### 5. Call-sheet integration (already exists — just needs Confirmed)
+
+Nothing new required: **Confirmed** writes the Job Log Talent row `Hold Status = Confirmed`; HoldCrew's
+existing `talent.html → "↻ Sync to Call Sheet"` (`v3-sync-talent`) projects Confirmed talent into the
+`Job_` tab day blocks; `callsheet.html`/DPR render them under Cast & Talent. **Booked (pending) stays off
+the sheet** — matches HoldCrew's own rule ("Confirmed only · holds stay here"). Optional later polish:
+auto-fire the sync when a talent is Confirmed.
+
+### 6. Build order (this spec)
+
+1. **Pipeline model** — the three axes (progress ticks + rank + disposition) + the two renames; keep a
+   derived "furthest stage" so the current board/combos keep working.
+2. **Audit UI** — the progress strip on each talent (drawer) + a booking-list / pipeline view with the
+   gap flags.
+3. **Presentation pages** — the group-like page object + curation (take pick, backup show/hide, order) +
+   the tokenized passive lookbook. *(This is the fleshed-out task 7.)*
+
+### Data-model deltas (when built)
+
+- `casting_assignments`: add `ms_shortlist / ms_recco / ms_approved / ms_booked / ms_confirmed` (TEXT
+  timestamps, NULL = not done); `rank` (`primary|backup`); `disposition` (`|pass|unavailable`). Keep
+  `status` as the derived furthest stage.
+- New `casting_pages` (id, project_id, tenant, name, token, ord, …) + `casting_page_items`
+  (page_id, kind `individual|combo`, ref_id, take_id NULL, show_backup, ord). Reuses the `casting_sends`
+  token idea, promoted to a named, multi-instance object.
+
+---
+
 ## Data model (SQLite; tenant- + project-scoped)
 
 Moving to a real DB removes the flat-Sheet design's "duplicate each candidate's details per role"
