@@ -149,6 +149,32 @@ try {
   }
 } catch (e) { /* older sqlite w/o DROP COLUMN — harmless to leave the unused column */ }
 
+// Pipeline axes (spec §"Pipeline, Combos & Client Presentation"): the (candidate
+// × role) assignment carries three orthogonal axes instead of a single status —
+// five timestamped progress milestones, a rank (primary|backup), and a disposition
+// (''|pass|unavailable). `status` stays as a derived "furthest stage" so the current
+// board/combos keep rendering (see src/pipeline.js). Columns added idempotently;
+// the reconstruction of the axes from the pre-pipeline status is a one-time backfill
+// gated on user_version so it can never double-run.
+{
+  const pipeline = require('./pipeline');
+  const acols = db.prepare('PRAGMA table_info(casting_assignments)').all().map((c) => c.name);
+  const add = (name, decl) => { if (!acols.includes(name)) db.exec(`ALTER TABLE casting_assignments ADD COLUMN ${name} ${decl}`); };
+  add('ms_shortlist', 'TEXT');
+  add('ms_recco', 'TEXT');
+  add('ms_approved', 'TEXT');
+  add('ms_booked', 'TEXT');
+  add('ms_confirmed', 'TEXT');
+  add('rank', "TEXT NOT NULL DEFAULT 'primary'");
+  add('disposition', "TEXT NOT NULL DEFAULT ''");
+  if (db.pragma('user_version', { simple: true }) < 1) {
+    const rows = db.prepare('SELECT id, status FROM casting_assignments').all();
+    db.transaction(() => { for (const r of rows) pipeline.backfillFromStatus(db, r.id, r.status); })();
+    db.pragma('user_version = 1');
+    if (rows.length) console.log(`[migrate] pipeline axes backfilled for ${rows.length} assignment(s)`);
+  }
+}
+
 // Media files (casting tapes / headshots). A candidate has MANY takes, not one,
 // so tapes live here (one row per file) rather than a single tape_key column.
 db.exec(`

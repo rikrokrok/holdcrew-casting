@@ -8,7 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const cfg = {
   ROOT,
   PUBLIC_DIR: path.join(ROOT, 'public'),
-  DATA_DIR: path.join(ROOT, 'data'),
+  DATA_DIR: process.env.CASTING_DATA_DIR ? path.resolve(process.env.CASTING_DATA_DIR) : path.join(ROOT, 'data'),
   PORT: Number(process.env.CASTING_PORT) || 4100,
 
   // Subdomain base + dev fallback tenant (see src/tenant.js).

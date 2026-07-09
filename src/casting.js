@@ -13,6 +13,7 @@ const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
 const holdcrew = require('./holdcrew');
+const pipeline = require('./pipeline');
 const { mediaKey } = require('./tenant');
 const { projectId, roleId, candidateId, assignmentId, mediaId, comboId, comboSlotId, rand } = require('./ids');
 
@@ -23,8 +24,8 @@ const eff = (req) => req.tenant.slug;
 
 // 'submitted' = assigned to a role (in the General Call) but not yet shortlisted;
 // it's the base an actor lands at when their role is known (CSV/import or the
-// card's role picker). Shortlisting promotes them onto the Selects board.
-const STATUSES = new Set(['submitted', 'shortlist', 'callback', 'recommend', 'backup', 'select', 'hold', 'booked', 'pass']);
+// card's role picker). Shortlisting promotes them onto the Selects board. The
+// valid status vocabulary + the three-axis model behind it live in src/pipeline.js.
 
 // ── project resolution (one board per tenant+job) ────────────────────────────
 const qProject = db.prepare('SELECT * FROM casting_projects WHERE tenant = ? AND job = ?');
@@ -141,14 +142,20 @@ router.get('/board', (req, res) => {
   const p = getOrCreateProject(t, job);
   const roles = db.prepare('SELECT id, name, character, ord FROM casting_roles WHERE project_id = ? ORDER BY ord, created_at').all(p.id);
   const cands = db.prepare('SELECT * FROM casting_candidates WHERE project_id = ? ORDER BY created_at').all(p.id);
-  const asg = db.prepare('SELECT candidate_id, role_id, status FROM casting_assignments WHERE project_id = ?').all(p.id);
-  const byCand = {};
-  for (const a of asg) (byCand[a.candidate_id] ||= {})[a.role_id] = a.status;
+  const asg = db.prepare(`SELECT candidate_id, role_id, status, ${pipeline.AXIS_COLS} FROM casting_assignments WHERE project_id = ?`).all(p.id);
+  // Two views of each assignment: `assignments[roleId] = status` (the derived
+  // furthest stage the current board renders, unchanged) and `pipeline[roleId] =
+  // {status, rank, disposition, ms, gaps}` (the three axes the audit UI consumes).
+  const byCand = {}, pipeByCand = {};
+  for (const a of asg) {
+    (byCand[a.candidate_id] ||= {})[a.role_id] = a.status;
+    (pipeByCand[a.candidate_id] ||= {})[a.role_id] = pipeline.shape(a);
+  }
   const combos = db.prepare('SELECT * FROM casting_combos WHERE project_id = ? ORDER BY ord, created_at').all(p.id);
   res.json({
     project: { id: p.id, job: p.job, title: p.title },
     roles,
-    candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {}, tapes: tapesFor(c.id) })),
+    candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {}, pipeline: pipeByCand[c.id] || {}, tapes: tapesFor(c.id) })),
     combos: combos.map(toCombo),
   });
 });
@@ -327,17 +334,22 @@ router.put('/assignments', (req, res) => {
   const role = qRole.get(rid, t);
   if (!cand || !role) return res.status(404).json({ error: 'candidate_or_role_not_found' });
   if (cand.project_id !== role.project_id) return res.status(400).json({ error: 'cross_project' });
+  // Transitional single-select write: applyLegacyStatus stores the picked status
+  // verbatim AND syncs the three axes to match (see src/pipeline.js). A brand-new
+  // row is created at the 'submitted' base first, then set to the wanted status
+  // (default 'shortlist', preserving the old assign-defaults-to-shortlist behaviour).
   const existing = db.prepare('SELECT id, status FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cid, rid);
-  const wanted = STATUSES.has(req.body?.status) ? req.body.status : null;
-  let status;
+  const wanted = pipeline.LEGACY[req.body?.status] ? req.body.status : null;
+  let id, status;
   if (existing) {
-    status = wanted || existing.status;
-    db.prepare("UPDATE casting_assignments SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, existing.id);
+    id = existing.id;
+    status = wanted ? pipeline.applyLegacyStatus(db, id, wanted) : existing.status;
   } else {
-    status = wanted || 'shortlist';
+    id = assignmentId();
     const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(rid).n;
     db.prepare('INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(assignmentId(), cand.project_id, t, cid, rid, status, ord);
+      .run(id, cand.project_id, t, cid, rid, 'submitted', ord);
+    status = pipeline.applyLegacyStatus(db, id, wanted || 'shortlist');
   }
   res.json({ ok: true, candidateId: cid, roleId: rid, status });
 });
@@ -352,35 +364,35 @@ router.delete('/assignments', (req, res) => {
   res.status(204).end();
 });
 
-// ── Hold / Book → promote to the HoldCrew Job Log (the single cross-system write)
-// Hold and Book are the two commitments. Both mark the (candidate × role)
-// assignment (local truth) AND upsert a Talent row into that job's HoldCrew Job
-// Log via v3-talent-save — Hold writes it pending (blank Hold Status, so it's a
-// tentative talent, not yet on the call sheet), Book writes it Confirmed (which
-// syncs to the call sheet/DPR). The local commit always succeeds; the Job Log
-// write is reported honestly — on failure the commit stands and the UI says retry.
-async function commitToRole(req, res, castingStatus, holdStatus) {
-  const t = eff(req);
-  const cand = qCand.get(req.params.id, t);
-  if (!cand) return res.status(404).json({ error: 'candidate_not_found' });
-  const rid = String(req.body?.roleId || '');
-  const role = qRole.get(rid, t);
-  if (!role) return res.status(404).json({ error: 'role_not_found' });
-  if (cand.project_id !== role.project_id) return res.status(400).json({ error: 'cross_project' });
-  const project = db.prepare('SELECT * FROM casting_projects WHERE id = ?').get(cand.project_id);
-
-  // 1) local truth: upsert the assignment status.
-  const existing = db.prepare('SELECT id FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cand.id, rid);
-  if (existing) {
-    db.prepare("UPDATE casting_assignments SET status = ?, updated_at = datetime('now') WHERE id = ?").run(castingStatus, existing.id);
-  } else {
-    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(rid).n;
+// Ensure a (candidate × role) assignment exists for this tenant, creating it at the
+// 'submitted' base if missing. Returns { cand, role, asgId } or null (bad ids /
+// cross-project). Shared by the commitments and the pipeline-axis primitives.
+function ensureAsg(t, candId, roleId) {
+  const cand = qCand.get(candId, t);
+  const role = qRole.get(roleId, t);
+  if (!cand || !role || cand.project_id !== role.project_id) return null;
+  let asg = db.prepare('SELECT id FROM casting_assignments WHERE candidate_id = ? AND role_id = ?').get(cand.id, role.id);
+  if (!asg) {
+    const ord = db.prepare('SELECT COALESCE(MAX(ord), -1) + 1 AS n FROM casting_assignments WHERE role_id = ?').get(role.id).n;
+    const id = assignmentId();
     db.prepare('INSERT INTO casting_assignments (id, project_id, tenant, candidate_id, role_id, status, ord) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(assignmentId(), cand.project_id, t, cand.id, rid, castingStatus, ord);
+      .run(id, cand.project_id, t, cand.id, role.id, 'submitted', ord);
+    asg = { id };
   }
+  return { cand, role, asgId: asg.id };
+}
 
-  // 2) cross-system: promote to the Job Log (character = the role's character, or
-  // the role name if none). holdStatus '' = pending hold, 'Confirmed' = booked.
+// ── Booked / Confirmed → promote to the HoldCrew Job Log (the cross-system write)
+// The two committing milestones. Ticking one marks the assignment (local truth via
+// the pipeline axes) AND upserts a Talent row into that job's HoldCrew Job Log via
+// v3-talent-save — Booked writes it pending (blank Hold Status: a tentative talent,
+// not yet on the call sheet), Confirmed writes it Confirmed (which syncs to the call
+// sheet/DPR). The local tick always succeeds; the Job Log write is reported honestly
+// — on failure the tick stands and the UI says retry. Reached from the Booked/Confirmed
+// buttons AND from ticking those milestones on the audit strip, so it lives here once.
+async function commitMilestone(t, cand, role, asgId, milestone) {
+  const status = pipeline.setMilestone(db, asgId, milestone, true);
+  const project = db.prepare('SELECT job FROM casting_projects WHERE id = ?').get(cand.project_id);
   const talent = {
     name: cand.name,
     email: cand.email || '',
@@ -394,18 +406,57 @@ async function commitToRole(req, res, castingStatus, holdStatus) {
     notes: cand.note || '',
     sessionCost: cand.session_fee || '',   // usage/buyout/fees ride along (placeholder)
     usageCost: cand.usage_fee || '',
-    status: holdStatus,
+    status: milestone === 'confirmed' ? 'Confirmed' : '',
   };
   try {
     const jobLog = await holdcrew.promoteToJobLog(t, project.job, talent);
-    res.json({ ok: true, status: castingStatus, promoted: true, company: t, jobLog });
+    return { status, promoted: true, jobLog };
   } catch (e) {
-    res.json({ ok: true, status: castingStatus, promoted: false, company: t, error: e.message });
+    return { status, promoted: false, error: e.message };
   }
 }
 
-router.post('/candidates/:id/hold', (req, res) => commitToRole(req, res, 'hold', ''));
-router.post('/candidates/:id/book', (req, res) => commitToRole(req, res, 'booked', 'Confirmed'));
+async function commitToRole(req, res, milestone) {
+  const r = ensureAsg(eff(req), req.params.id, String(req.body?.roleId || ''));
+  if (!r) return res.status(404).json({ error: 'candidate_or_role_not_found' });
+  const out = await commitMilestone(eff(req), r.cand, r.role, r.asgId, milestone);
+  res.json({ ok: true, company: eff(req), ...out });
+}
+
+// hold/book route names kept for the current UI; they set the Booked/Confirmed
+// milestones (spec rename Hold→Booked, Book→Confirmed).
+router.post('/candidates/:id/hold', (req, res) => commitToRole(req, res, 'booked'));
+router.post('/candidates/:id/book', (req, res) => commitToRole(req, res, 'confirmed'));
+
+// ── Pipeline axes (independent, timestamped) — the audit UI drives these ──────
+// Tick/untick one progress milestone. Ticking Booked/Confirmed also promotes to the
+// Job Log (same seam as the buttons); every other tick is local-only.
+router.put('/assignments/milestone', async (req, res) => {
+  const t = eff(req);
+  const r = ensureAsg(t, String(req.body?.candidateId || ''), String(req.body?.roleId || ''));
+  if (!r) return res.status(404).json({ error: 'candidate_or_role_not_found' });
+  const milestone = String(req.body?.milestone || '');
+  if (!pipeline.MS_COL[milestone]) return res.status(400).json({ error: 'bad_milestone' });
+  const on = req.body?.on !== false && req.body?.on !== 'false';
+  if (on && (milestone === 'booked' || milestone === 'confirmed')) {
+    const out = await commitMilestone(t, r.cand, r.role, r.asgId, milestone);
+    return res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, milestone, on, company: t, ...out });
+  }
+  const status = pipeline.setMilestone(db, r.asgId, milestone, on);
+  res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, milestone, on, status });
+});
+
+// Rank (primary|backup) and disposition (''|pass|unavailable) — the other two axes.
+router.put('/assignments/rank', (req, res) => {
+  const r = ensureAsg(eff(req), String(req.body?.candidateId || ''), String(req.body?.roleId || ''));
+  if (!r) return res.status(404).json({ error: 'candidate_or_role_not_found' });
+  res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, ...pipeline.setRank(db, r.asgId, String(req.body?.rank || '')) });
+});
+router.put('/assignments/disposition', (req, res) => {
+  const r = ensureAsg(eff(req), String(req.body?.candidateId || ''), String(req.body?.roleId || ''));
+  if (!r) return res.status(404).json({ error: 'candidate_or_role_not_found' });
+  res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, ...pipeline.setDisposition(db, r.asgId, String(req.body?.disposition || '')) });
+});
 
 // ── Combinations (named assembled casts for client options) ──────────────────
 router.post('/combos', (req, res) => {

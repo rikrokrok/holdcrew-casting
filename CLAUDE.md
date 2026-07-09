@@ -60,13 +60,28 @@ a modal showing the assembled cast big (role · photo · name · tape · status)
 the whole combo: **Recommend** (internal tier, assignment status), **Put on hold** / **Book** (write the
 HoldCrew Job Log via the per-actor hold/book endpoints, looped), plus Present (task 7 stub). Verified on
 test/LOTTERY (bulk recommend + hold-promotes-all).
-**⭐ NEXT — PIPELINE + PAGES REDESIGN (specced 2026-07-09, not built):** see PLAN.md §"Pipeline, Combos &
-Client Presentation — Design Spec". Replaces the single status with **three axes per person×role**
+**PIPELINE REDESIGN — STEP 1 (model) DONE 2026-07-09; STEP 2 (audit UI) NEXT.** Spec: PLAN.md §"Pipeline,
+Combos & Client Presentation — Design Spec". Replaces the single status with **three axes per person×role**
 (progress ticks Shortlist·Recco·Client-approved·Booked·Confirmed + rank Primary/Backup + disposition
-Pass/Unavailable), renames **Hold→Booked, Book→Confirmed**, keeps combos as pure UX grouping, and makes
-the client page a **curated, named, multi-instance "presentation page"** object (assign individuals/combos;
-pick the take shown; show/hide backups) — the fleshed-out task 7. Client stays passive; PM records every
-tick. Build order in the spec: (1) pipeline model + renames, (2) audit UI, (3) presentation pages.
+Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, (3) presentation pages.
+- **Step 1 (server, DONE):** new `src/pipeline.js` holds the three-axis model. `casting_assignments` gains
+  `ms_shortlist/ms_recco/ms_approved/ms_booked/ms_confirmed` (TEXT timestamps, NULL=not done), `rank`
+  (primary|backup), `disposition` (''|pass|unavailable). One-time backfill (gated on `user_version`, run
+  once) reconstructs the axes cumulatively from the old single status. **`status` is kept as a DERIVED
+  "furthest stage" so the current board/combos render UNCHANGED** — two writers agree via `pipeline.LEGACY`:
+  the transitional single-select (`PUT /assignments`) stores the picked status verbatim + syncs the axes;
+  the new independent primitives edit one axis then RE-derive status. New endpoints: `PUT /assignments/
+  {milestone,rank,disposition}` (milestone Booked/Confirmed also promotes to the Job Log, same seam as the
+  buttons). Board JSON now carries a parallel `pipeline[roleId] = {status,rank,disposition,ms,gaps}` block.
+  Gap flag works (Confirmed with Client-approved empty → `gaps:["approved"]`). Verified end-to-end against
+  an exact copy of live data (incl. WAL); the Job Log seam is stubbed in tests — never written from tests.
+  The **renames** (Hold→Booked, Book→Confirmed) are done in the DATA MODEL (a Booked tick = pending Job Log,
+  Confirmed = Confirmed); the button *labels* + the timestamped progress strip land in step 2's UI.
+- **Step 2 (audit UI, NEXT):** the progress strip on each talent (drawer) reading `pipeline.ms` + a
+  booking/pipeline view with the amber gap flags; rank + disposition controls; relabel the two buttons.
+  This is the visible-design step — mock/agree with Eric before rebuilding the live drawer.
+- **Step 3:** presentation pages (curated, named, multi-instance; take-pick + backup show/hide) = task 7.
+- Also: `CASTING_DATA_DIR` env now overrides the SQLite dir (used to migrate/verify against a DB copy).
 **NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
 simplification, transcode-to-spec decision.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by

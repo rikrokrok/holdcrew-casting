@@ -175,10 +175,14 @@ auto-fire the sync when a talent is Confirmed.
 
 ### 6. Build order (this spec)
 
-1. **Pipeline model** — the three axes (progress ticks + rank + disposition) + the two renames; keep a
-   derived "furthest stage" so the current board/combos keep working.
-2. **Audit UI** — the progress strip on each talent (drawer) + a booking-list / pipeline view with the
-   gap flags.
+1. ✅ **Pipeline model (DONE 2026-07-09)** — the three axes (progress ticks + rank + disposition) + the
+   two renames; `status` kept as a derived "furthest stage" so the current board/combos render unchanged.
+   Lives in `src/pipeline.js`; columns + one-time (user_version-gated) backfill in `src/db.js`; endpoints
+   `PUT /assignments/{milestone,rank,disposition}` + a parallel `pipeline[roleId]` block on the board JSON
+   in `src/casting.js`. Verified against an exact copy of live data (Job Log seam stubbed in tests).
+2. **Audit UI (NEXT)** — the progress strip on each talent (drawer) reading `pipeline.ms` + a booking-list
+   / pipeline view with the gap flags; rank + disposition controls; relabel the Hold/Book buttons to
+   Booked/Confirmed. Visible-design step — mock/agree before rebuilding the live drawer.
 3. **Presentation pages** — the group-like page object + curation (take pick, backup show/hide, order) +
    the tokenized passive lookbook. *(This is the fleshed-out task 7.)*
 
