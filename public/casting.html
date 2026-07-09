@@ -220,6 +220,36 @@
     .cp-tile--none:hover { color: var(--red); border-color: var(--red); }
     .cp-empty { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding: 12px; text-align: center; line-height: 1.5; }
 
+    /* combo review + commit window */
+    .combo-review-btn { width: calc(100% - 16px); margin: 2px 8px 9px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); background: rgba(245,166,35,0.08); border: 1px solid var(--amber-dim); border-radius: var(--radius); padding: 7px; cursor: pointer; }
+    .combo-review-btn:hover { background: rgba(245,166,35,0.16); }
+    .cr-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: min(560px, 94vw); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+    .cr-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border-inner); background: var(--surface-raised); }
+    .cr-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .cr-grp { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim); }
+    .cr-name-big { font-family: var(--font-display); font-size: 24px; letter-spacing: 0.04em; color: var(--text); }
+    .cr-close { background: none; border: none; color: var(--subtle); font-size: 24px; line-height: 1; cursor: pointer; }
+    .cr-close:hover { color: var(--text); }
+    .cr-body { padding: 12px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .cr-slot { display: flex; gap: 12px; align-items: center; }
+    .cr-photo { width: 56px; height: 70px; object-fit: cover; border-radius: 6px; background: var(--surface-raised); flex-shrink: 0; }
+    .cr-info { min-width: 0; flex: 1; }
+    .cr-role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); }
+    .cr-char { color: var(--subtle); }
+    .cr-name { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.03em; color: var(--text); }
+    .cr-meta { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--subtle); margin-top: 2px; }
+    .cr-tape { background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--amber); font-family: var(--font-mono); font-size: 10px; padding: 2px 9px; cursor: pointer; }
+    .cr-tape:hover { border-color: var(--amber); }
+    .cr-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); padding: 20px 4px; text-align: center; }
+    .cr-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border-inner); background: var(--surface-raised); }
+    .cr-act { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; border-radius: var(--radius); padding: 9px 15px; cursor: pointer; border: 1px solid transparent; }
+    .cr-act--rec { color: var(--amber); background: rgba(245,166,35,0.12); border-color: rgba(245,166,35,0.4); }
+    .cr-act--hold { color: #000; background: #5bbfb5; border-color: #5bbfb5; }
+    .cr-act--book { color: #000; background: var(--green); border-color: var(--green); }
+    .cr-act--present { color: var(--subtle); background: none; border-color: var(--border); margin-left: auto; }
+    .cr-act:hover { filter: brightness(1.1); }
+    .cr-note { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); padding: 0 18px 14px; background: var(--surface-raised); line-height: 1.5; }
+
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
     .d-item { min-width: 0; }
     .d-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
@@ -297,6 +327,11 @@
   <!-- combo slot photo picker -->
   <div class="modal-back hidden" id="cp-back" onclick="closeSlotPicker(event)">
     <div class="cp-modal" id="cp-modal" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <!-- combo review + commit window -->
+  <div class="modal-back hidden" id="combo-review-back" onclick="closeComboReview(event)">
+    <div class="cr-modal" id="combo-review" onclick="event.stopPropagation()"></div>
   </div>
 
   <!-- import CSV modal -->
@@ -554,14 +589,14 @@
       }).join('');
       return `<div class="combo-card">
         <div class="combo-card__head">
-          <input class="combo-name" value="${esc(cb.name)}" title="Rename" onchange="renameCombo('${cb.id}',this.value)">
+          <input class="combo-name" value="${esc(cb.name)}" title="Rename" onclick="event.stopPropagation()" onchange="renameCombo('${cb.id}',this.value)">
           <div class="combo-card__actions">
             <button class="combo-act" title="Duplicate to a variant" onclick="duplicateCombo('${cb.id}')">⧉</button>
-            <button class="combo-act" title="Present to client" onclick="presentCombo('${cb.id}')">▷</button>
             <button class="combo-act combo-act--del" title="Delete" onclick="deleteCombo('${cb.id}')">✕</button>
           </div>
         </div>
         <div class="combo-slots">${rows}</div>
+        <button class="combo-review-btn" onclick="openComboReview('${cb.id}')">Review &amp; commit →</button>
       </div>`;
     }
     async function newCombo() {
@@ -638,6 +673,72 @@
     function presentCombo(id) {
       const cb = comboById(id);
       alert(`Client presentation for "${cb ? cb.name : ''}" — the passive assembled-cast lookbook — is the next slice to build (task 7).`);
+    }
+
+    // ── combo review window: see the assembled cast big, then commit the whole
+    // combo at once — Recommend (internal tier) / Put on hold / Book (Job Log). ──
+    function openComboReview(id) {
+      const cb = comboById(id); if (!cb) return;
+      document.getElementById('combo-review').innerHTML = comboReviewHtml(cb);
+      document.getElementById('combo-review-back').classList.remove('hidden');
+    }
+    function closeComboReview(e) {
+      if (e && e.target !== document.getElementById('combo-review-back')) return;
+      document.getElementById('combo-review-back').classList.add('hidden');
+    }
+    function comboReviewHtml(cb) {
+      const filled = roles.filter(r => cb.slots[r.id]).map(r => ({ r, c: byId(cb.slots[r.id]) })).filter(x => x.c);
+      const cast = filled.length ? filled.map(({ r, c }) => {
+        const nt = (c.tapes || []).length;
+        const tape = nt ? `<button class="cr-tape" onclick="openVideo('${c.id}')">▶ ${nt > 1 ? nt + ' tapes' : 'Tape'}</button>` : '';
+        const st = (c.assignments || {})[r.id];
+        return `<div class="cr-slot">
+          <img class="cr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
+          <div class="cr-info">
+            <div class="cr-role">${esc(r.name)}${r.character ? ` · <span class="cr-char">${esc(r.character)}</span>` : ''}</div>
+            <div class="cr-name">${esc(c.name)}</div>
+            <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? statusBadge(st) : ''}</div>
+          </div>
+        </div>`;
+      }).join('') : `<div class="cr-empty">No actors picked yet — fill this combo's role slots first (tap a slot on the card).</div>`;
+      const n = filled.length;
+      const actions = n ? `
+        <button class="cr-act cr-act--rec" onclick="comboAction('${cb.id}','recommend')">Recommend</button>
+        <button class="cr-act cr-act--hold" onclick="comboAction('${cb.id}','hold')">Put on hold</button>
+        <button class="cr-act cr-act--book" onclick="comboAction('${cb.id}','book')">Book</button>
+        <button class="cr-act cr-act--present" onclick="presentCombo('${cb.id}')">Present ▷</button>` : '';
+      return `
+        <div class="cr-head">
+          <div class="cr-title">${cb.grp ? `<span class="cr-grp">${esc(cb.grp)}</span>` : ''}<span class="cr-name-big">${esc(cb.name)}</span></div>
+          <button class="cr-close" onclick="closeComboReview()">&times;</button>
+        </div>
+        <div class="cr-body">${cast}</div>
+        <div class="cr-actions">${actions}</div>
+        ${n ? `<div class="cr-note">Applies to all ${n} in this combo. Hold / Book write to the HoldCrew Job Log; Recommend is internal.</div>` : ''}`;
+    }
+    async function comboAction(comboId, action) {
+      const cb = comboById(comboId); if (!cb) return;
+      const filled = roles.filter(r => cb.slots[r.id]).map(r => ({ roleId: r.id, candId: cb.slots[r.id] }));
+      if (!filled.length) return;
+      const verb = { recommend: 'Recommend', hold: 'Put on hold', book: 'Book' }[action];
+      const writes = action !== 'recommend';
+      if (!confirm(`${verb} all ${filled.length} in "${cb.name}"?${writes ? '\n\nThis writes them to the HoldCrew Job Log.' : ''}`)) return;
+      let ok = 0, warn = 0;
+      for (const { roleId, candId } of filled) {
+        const c = byId(candId); if (!c) continue;
+        try {
+          if (action === 'recommend') {
+            const res = await api.send('PUT', '/api/casting/assignments', { candidateId: candId, roleId, status: 'recommend' });
+            c.assignments = c.assignments || {}; c.assignments[roleId] = (res && res.status) || 'recommend'; ok++;
+          } else {
+            const res = await api.send('POST', `/api/casting/candidates/${candId}/${action}`, { roleId });
+            c.assignments = c.assignments || {}; c.assignments[roleId] = action === 'book' ? 'booked' : 'hold';
+            if (res && res.promoted === false) warn++; else ok++;
+          }
+        } catch (e) { if (e.message === 'auth') return; warn++; }
+      }
+      openComboReview(comboId); render();
+      toast(warn ? `${verb}: ${ok} done, ${warn} with a Job Log issue — retry.` : `${verb} — ${ok} updated.`, warn > 0);
     }
     function roleSection(r) {
       // Selects board = shortlisted+ (candidates still at 'submitted' stay in the

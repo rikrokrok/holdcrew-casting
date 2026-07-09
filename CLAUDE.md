@@ -55,9 +55,13 @@ Wasabi → `casting_media` take) with an Upload-tape button + per-take list in t
 placeholder fields on the candidate (session_fee/usage_fee/usage_terms) shown in the drawer + ride along
 into Book/Hold (v3-talent-save sessionCost/usageCost). Upshot re-linked to HoldCrew `upshot` (Eric
 renamed v3→upshot; `v3` row lingers for an in-flight job — harmless for casting).
+**Combo review window — DONE 2026-07-09:** each combo card has a **Review & commit →** button →
+a modal showing the assembled cast big (role · photo · name · tape · status) with bulk actions across
+the whole combo: **Recommend** (internal tier, assignment status), **Put on hold** / **Book** (write the
+HoldCrew Job Log via the per-actor hold/book endpoints, looped), plus Present (task 7 stub). Verified on
+test/LOTTERY (bulk recommend + hold-promotes-all).
 **NOT DONE:** CSV import UI polish, client presentation (task 7 — incl. combo lookbook), job.html tile
-(task 9, decoupled), drawer single-role simplification, transcode-to-spec decision, combo review window
-(building next: click a combo → review + bulk Recommend/Hold).
+(task 9, decoupled), drawer single-role simplification, transcode-to-spec decision.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
   re-running. `.env` not needed until the media slice (service runs on defaults).
 
