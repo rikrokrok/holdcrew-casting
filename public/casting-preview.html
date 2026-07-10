@@ -101,6 +101,9 @@
     .sel-sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .sel-status { flex-shrink: 0; }
     .role-empty { padding: 14px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    /* backups sub-bench within a role (Selects tab) */
+    .role-subhead { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--surface-mid); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-inner); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
+    .role-subhead__n { color: var(--muted); }
 
     /* ── detail drawer (shared by both tabs) ── */
     .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem 1rem; overflow-y: auto; }
@@ -842,21 +845,27 @@
     }
     function roleSection(r) {
       // Selects board = shortlisted+ (candidates still at 'submitted' stay in the
-      // General Call until they're shortlisted).
-      const members = cands
-        .filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]))
-        .sort((a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name));
+      // General Call until they're shortlisted). Backups (rank=backup) are relegated
+      // selects, so split them onto a sub-bench below the primary contenders.
+      const byStatus = (a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name);
+      const all = cands.filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]));
+      const isBackup = c => pipeFor(c, r.id).rank === 'backup';
+      const primaries = all.filter(c => !isBackup(c)).sort(byStatus);
+      const backups = all.filter(isBackup).sort(byStatus);
       const collapsed = collapsedRoles.has(r.id);
-      const nSel = members.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
-      const rows = members.length
-        ? members.map(c => selRow(c, r.id)).join('')
+      const nSel = all.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
+      const rows = all.length
+        ? (primaries.map(c => selRow(c, r.id)).join('')
+           + (backups.length
+              ? `<div class="role-subhead">Backups <span class="role-subhead__n">${backups.length}</span></div>` + backups.map(c => selRow(c, r.id)).join('')
+              : ''))
         : `<div class="role-empty">No one shortlisted yet — shortlist actors from the General Call.</div>`;
       return `<div class="role-sec ${collapsed?'collapsed':''}">
         <div class="role-head" onclick="toggleRole('${r.id}')">
           <span class="role-head__chev">▾</span>
           <span class="role-head__name">${esc(r.name)}</span>
           <span class="role-head__char">${esc(r.character || '')}</span>
-          <span class="role-head__count">${members.length} in contention${nSel?` · ${nSel} select`:''}</span>
+          <span class="role-head__count">${all.length} in contention${nSel?` · ${nSel} select`:''}${backups.length?` · ${backups.length} backup`:''}</span>
           ${nSel ? `<a class="role-present" onclick="event.stopPropagation();presentRole('${r.id}')">Present to client →</a>` : ''}
         </div>
         <div class="role-body">${rows}</div>
