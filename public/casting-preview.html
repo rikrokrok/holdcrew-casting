@@ -308,8 +308,6 @@
     .cr-slot { display: flex; gap: 12px; align-items: center; }
     .cr-slot--pick { cursor: pointer; border: 1px solid transparent; border-radius: var(--radius); padding: 6px; }
     .cr-slot--pick:hover { border-color: var(--border); background: var(--surface-mid); }
-    .cr-swap { margin-left: auto; align-self: center; flex-shrink: 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; }
-    .cr-slot--pick:hover .cr-swap { color: var(--amber); border-color: var(--amber); }
     .cr-photo--empty { display: block; border: 1px dashed var(--dim); box-sizing: border-box; }
     .cr-name--empty { color: var(--muted); font-style: italic; }
     /* the slot picker opens OVER the review window, so lift it above (both are .modal-back z 200) */
@@ -789,7 +787,6 @@
           return `<div class="cr-slot cr-slot--pick cr-slot--empty" onclick="openSlotPicker('${cb.id}','${r.id}')" title="Pick ${esc(r.name)}">
             <span class="cr-photo cr-photo--empty"></span>
             <div class="cr-info"><div class="cr-role">${roleLabel(r)}</div><div class="cr-name cr-name--empty">Pick an actor…</div></div>
-            <span class="cr-swap">+ Pick</span>
           </div>`;
         }
         const nt = (c.tapes || []).length;
@@ -802,7 +799,6 @@
             <div class="cr-name">${esc(c.name)}</div>
             <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? statusBadge(st) : ''}</div>
           </div>
-          <span class="cr-swap">⇄ Swap</span>
         </div>`;
       }).join('') : `<div class="cr-empty">No roles yet — add roles on the Selects tab first.</div>`;
       const n = roles.filter(r => cb.slots[r.id]).length;
