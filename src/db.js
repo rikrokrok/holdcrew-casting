@@ -266,6 +266,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pageitems_page ON casting_page_items(page_id);
 `);
 
+// Per-member take picks for a COMBO page-item (individuals use take_id). JSON map
+// { candidateId: takeId } — which tape each combo member plays on the client page.
+// Added after ship; idempotent.
+if (!db.prepare('PRAGMA table_info(casting_page_items)').all().some((c) => c.name === 'take_overrides')) {
+  db.exec('ALTER TABLE casting_page_items ADD COLUMN take_overrides TEXT');
+}
+
 // Migrate the legacy single tape_key -> a casting_media 'Take 1' row. Idempotent
 // (skips a candidate whose tape_key is already represented).
 {

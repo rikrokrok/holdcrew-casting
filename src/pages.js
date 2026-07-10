@@ -48,10 +48,11 @@ function buildLookbook(page) {
       const combo = db.prepare('SELECT * FROM casting_combos WHERE id = ?').get(it.ref_id);
       if (!combo) continue;
       const slots = db.prepare('SELECT role_id, candidate_id FROM casting_combo_slots WHERE combo_id = ? ORDER BY ord').all(combo.id);
+      const ov = it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {};
       const roles = slots.map((s) => {
         const role = qRoleRow.get(s.role_id), cand = qCandRow.get(s.candidate_id);
         if (!role || !cand) return null;
-        return { role: { name: role.name, character: role.character }, actor: actorShape(cand, null) };
+        return { role: { name: role.name, character: role.character }, actor: actorShape(cand, ov[cand.id] || null) };
       }).filter(Boolean);
       if (roles.length) out.push({ kind: 'combo', name: combo.name, grp: combo.grp || '', roles });
     } else {
@@ -88,6 +89,7 @@ producer.get('/pages/:id', (req, res) => {
   const items = qItems.all(page.id).map((it) => ({
     id: it.id, kind: it.kind, refId: it.ref_id, roleId: it.role_id || null,
     takeId: it.take_id || null, showBackup: !!it.show_backup, ord: it.ord,
+    takeOverrides: it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {},
   }));
   res.json({ ...toPage(page), items });
 });
@@ -168,9 +170,17 @@ producer.put('/pages/:id/items/:itemId', (req, res) => {
   const takeId = req.body?.takeId !== undefined ? (req.body.takeId ? String(req.body.takeId) : null) : it.take_id;
   const showBackup = req.body?.showBackup !== undefined ? (req.body.showBackup ? 1 : 0) : it.show_backup;
   const ord = req.body?.ord !== undefined ? Number(req.body.ord) : it.ord;
-  db.prepare('UPDATE casting_page_items SET take_id = ?, show_backup = ?, ord = ? WHERE id = ?').run(takeId, showBackup, ord, it.id);
+  // Per-member take pick for a combo: { candidateId, takeId } merges into the JSON map.
+  let overrides = it.take_overrides;
+  const to = req.body?.takeOverride;
+  if (to && to.candidateId) {
+    const map = it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {};
+    if (to.takeId) map[String(to.candidateId)] = String(to.takeId); else delete map[String(to.candidateId)];
+    overrides = JSON.stringify(map);
+  }
+  db.prepare('UPDATE casting_page_items SET take_id = ?, show_backup = ?, ord = ?, take_overrides = ? WHERE id = ?').run(takeId, showBackup, ord, overrides, it.id);
   db.prepare("UPDATE casting_pages SET updated_at = datetime('now') WHERE id = ?").run(page.id);
-  res.json({ id: it.id, takeId, showBackup: !!showBackup, ord });
+  res.json({ id: it.id, takeId, showBackup: !!showBackup, ord, takeOverrides: overrides ? JSON.parse(overrides) : {} });
 });
 
 producer.delete('/pages/:id/items/:itemId', (req, res) => {
