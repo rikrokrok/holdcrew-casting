@@ -77,9 +77,19 @@ Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, 
   an exact copy of live data (incl. WAL); the Job Log seam is stubbed in tests — never written from tests.
   The **renames** (Hold→Booked, Book→Confirmed) are done in the DATA MODEL (a Booked tick = pending Job Log,
   Confirmed = Confirmed); the button *labels* + the timestamped progress strip land in step 2's UI.
-- **Step 2 (audit UI, NEXT):** the progress strip on each talent (drawer) reading `pipeline.ms` + a
-  booking/pipeline view with the amber gap flags; rank + disposition controls; relabel the two buttons.
-  This is the visible-design step — mock/agree with Eric before rebuilding the live drawer.
+- **Step 2 (audit UI) — PREVIEW BUILT 2026-07-09, pending Eric sign-off + cutover.** Mock approved ("i
+  like it a lot") → `public/pipeline-mock.html`. Real wired build = **`public/casting-preview.html`**
+  (served ungated for review; **live `casting.html` untouched**). Drawer "Consider for" = a five-node
+  timestamped **progress strip** per assigned role (tap to tick) + Primary/Backup segmented + Pass/Unavail
+  chips + amber gap-flag line; new **Booking tab** = whole pipeline at a glance (mini-strip + badge per
+  talent, banner counts gaps). Wired to `PUT /assignments/{milestone,rank,disposition}`; old status
+  dropdown + Hold/Book buttons removed. Renamed labels (Hold→Booked, Book→Confirmed, Select→Approved,
+  Recommend→Recco). Deep-links `?tab=` / `?open=`. Defines `--teal` (casting.css only had literal #5bbfb5
+  → `var(--teal)` was invalid, Booked nodes rendered empty — fixed). Verified by rendering the real UI
+  against seeded pipeline data (gaps/backup/unavailable/pass) via a local stub. **Preview URL:
+  `https://upshot.casting.holdcrew.com/casting-preview.html?job=PWS` (login → real data; changes save).
+  CUTOVER when signed off: `cp public/casting-preview.html public/casting.html` (carries the `--teal` +
+  everything), then delete the preview.**
 - **Step 3:** presentation pages (curated, named, multi-instance; take-pick + backup show/hide) = task 7.
 - Also: `CASTING_DATA_DIR` env now overrides the SQLite dir (used to migrate/verify against a DB copy).
 **NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
