@@ -306,6 +306,14 @@
     .cr-close:hover { color: var(--text); }
     .cr-body { padding: 12px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
     .cr-slot { display: flex; gap: 12px; align-items: center; }
+    .cr-slot--pick { cursor: pointer; border: 1px solid transparent; border-radius: var(--radius); padding: 6px; }
+    .cr-slot--pick:hover { border-color: var(--border); background: var(--surface-mid); }
+    .cr-swap { margin-left: auto; align-self: center; flex-shrink: 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; }
+    .cr-slot--pick:hover .cr-swap { color: var(--amber); border-color: var(--amber); }
+    .cr-photo--empty { display: block; border: 1px dashed var(--dim); box-sizing: border-box; }
+    .cr-name--empty { color: var(--muted); font-style: italic; }
+    /* the slot picker opens OVER the review window, so lift it above (both are .modal-back z 200) */
+    #cp-back { z-index: 260; }
     .cr-photo { width: 56px; height: 70px; object-fit: cover; border-radius: 6px; background: var(--surface-raised); flex-shrink: 0; }
     .cr-info { min-width: 0; flex: 1; }
     .cr-role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); }
@@ -514,6 +522,7 @@
         combos = board.combos || [];
         render();
         const openId = params.get('open'); if (openId && byId(openId)) openDrawer(openId); // deep-link a drawer
+        const revId = params.get('review'); if (revId && comboById(revId)) openComboReview(revId); // deep-link a combo review
       } catch (e) {
         if (e.message === 'auth') return;
         el.innerHTML = `<div class="load-err">Couldn't load casting. <a href="#" onclick="loadBoard();return false;">Retry</a></div>`;
@@ -717,7 +726,9 @@
     let pickerCtx = null;
     function openSlotPicker(cbId, roleId) {
       const cb = comboById(cbId), r = roleById(roleId); if (!cb || !r) return;
-      pickerCtx = { cbId, roleId };
+      // Remember if we opened over the review window, so we can return to it refreshed.
+      const reviewOpen = !document.getElementById('combo-review-back').classList.contains('hidden');
+      pickerCtx = { cbId, roleId, reviewOpen };
       const curId = cb.slots[roleId] || '';
       const pool = cands.filter(c => c.assignments && roleId in c.assignments && onSelects(c.assignments[roleId]));
       const tiles = pool.map(c => `
@@ -745,10 +756,11 @@
     }
     async function chooseSlot(candId) {
       if (!pickerCtx) return;
-      const { cbId, roleId } = pickerCtx;
+      const { cbId, roleId, reviewOpen } = pickerCtx;
       document.getElementById('cp-back').classList.add('hidden');
       pickerCtx = null;
       await setSlot(cbId, roleId, candId);
+      if (reviewOpen) openComboReview(cbId);   // return to the review with the new pick shown
     }
     function presentCombo(id) {
       const cb = comboById(id);
@@ -767,21 +779,33 @@
       document.getElementById('combo-review-back').classList.add('hidden');
     }
     function comboReviewHtml(cb) {
-      const filled = roles.filter(r => cb.slots[r.id]).map(r => ({ r, c: byId(cb.slots[r.id]) })).filter(x => x.c);
-      const cast = filled.length ? filled.map(({ r, c }) => {
+      // Every role is a swappable slot right here — tap to change (or fill/clear)
+      // the pick without leaving the review. Empty roles show too, so a combo can
+      // be assembled entirely from this window.
+      const roleLabel = r => `${esc(r.name)}${r.character ? ` · <span class="cr-char">${esc(r.character)}</span>` : ''}`;
+      const cast = roles.length ? roles.map(r => {
+        const c = cb.slots[r.id] ? byId(cb.slots[r.id]) : null;
+        if (!c) {
+          return `<div class="cr-slot cr-slot--pick cr-slot--empty" onclick="openSlotPicker('${cb.id}','${r.id}')" title="Pick ${esc(r.name)}">
+            <span class="cr-photo cr-photo--empty"></span>
+            <div class="cr-info"><div class="cr-role">${roleLabel(r)}</div><div class="cr-name cr-name--empty">Pick an actor…</div></div>
+            <span class="cr-swap">+ Pick</span>
+          </div>`;
+        }
         const nt = (c.tapes || []).length;
-        const tape = nt ? `<button class="cr-tape" onclick="openVideo('${c.id}')">▶ ${nt > 1 ? nt + ' tapes' : 'Tape'}</button>` : '';
+        const tape = nt ? `<button class="cr-tape" onclick="event.stopPropagation();openVideo('${c.id}')">▶ ${nt > 1 ? nt + ' tapes' : 'Tape'}</button>` : '';
         const st = (c.assignments || {})[r.id];
-        return `<div class="cr-slot">
+        return `<div class="cr-slot cr-slot--pick" onclick="openSlotPicker('${cb.id}','${r.id}')" title="Tap to swap ${esc(r.name)}">
           <img class="cr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
           <div class="cr-info">
-            <div class="cr-role">${esc(r.name)}${r.character ? ` · <span class="cr-char">${esc(r.character)}</span>` : ''}</div>
+            <div class="cr-role">${roleLabel(r)}</div>
             <div class="cr-name">${esc(c.name)}</div>
             <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? statusBadge(st) : ''}</div>
           </div>
+          <span class="cr-swap">⇄ Swap</span>
         </div>`;
-      }).join('') : `<div class="cr-empty">No actors picked yet — fill this combo's role slots first (tap a slot on the card).</div>`;
-      const n = filled.length;
+      }).join('') : `<div class="cr-empty">No roles yet — add roles on the Selects tab first.</div>`;
+      const n = roles.filter(r => cb.slots[r.id]).length;
       const actions = n ? `
         <button class="cr-act cr-act--rec" onclick="comboAction('${cb.id}','recommend')">Recommend</button>
         <button class="cr-act cr-act--hold" onclick="comboAction('${cb.id}','hold')">Book</button>
