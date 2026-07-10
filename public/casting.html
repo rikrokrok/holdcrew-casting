@@ -370,12 +370,20 @@
     .pe-thumb--combo { display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--amber); border: 1px solid var(--border); }
     .pe-item--combo { display: block; padding: 0; }
     .pe-combo__head { display: flex; align-items: center; gap: 11px; padding: 8px; }
-    .pe-cmembers { border-top: 1px solid var(--border-inner); padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
-    .pe-cmember { display: flex; align-items: center; gap: 9px; padding: 4px 2px; }
+    .pe-cmembers { border-top: 1px solid var(--border-inner); padding: 4px 8px 8px; display: flex; flex-direction: column; }
+    .pe-cmember { display: flex; flex-direction: column; gap: 7px; padding: 8px 2px; border-top: 1px solid var(--border-inner); }
+    .pe-cmember:first-child { border-top: none; }
+    .pe-cmember__top { display: flex; align-items: center; gap: 9px; }
     .pe-cthumb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; }
-    .pe-cmember__role { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); width: 62px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pe-cmember__role { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); width: 66px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pe-cmember__name { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pe-cmember__notape { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); font-style: italic; }
+    .pe-cmember__takes { padding-left: 35px; }
+    .pe-indiv__takes { padding-left: 0; }
+    .pe-takes { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pe-takechip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; color: var(--subtle); background: var(--surface-mid); border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px 3px 8px; cursor: pointer; }
+    .pe-takechip input { accent-color: var(--amber); margin: 0; cursor: pointer; width: 13px; height: 13px; }
+    .pe-takechip.on { color: var(--text); border-color: var(--amber-dim); }
+    .pe-notape { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); font-style: italic; }
     .pe-item__main { flex: 1; min-width: 0; }
     .pe-item__name { font-size: 13.5px; color: var(--text); }
     .pe-item__role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); margin-top: 2px; }
@@ -1049,37 +1057,34 @@
     const refreshPageEditor = () => editingPageId && openPageEditor(editingPageId);
 
     function pageEditorHtml(pg) {
+      // Per-actor take checklist — tick which takes the client sees (all on by default).
+      const takeChecklist = (itemId, c, shown) => {
+        const takes = c.tapes || [];
+        if (!takes.length) return `<span class="pe-notape">No tape</span>`;
+        const on = t => Array.isArray(shown) ? shown.includes(t.id) : true;
+        return `<div class="pe-takes" data-item="${itemId}" data-cand="${c.id}">${takes.map(t =>
+          `<label class="pe-takechip${on(t) ? ' on' : ''}"><input type="checkbox" value="${t.id}" ${on(t) ? 'checked' : ''} onchange="toggleTake('${itemId}','${c.id}')"><span>${esc(t.label || 'Take')}</span></label>`).join('')}</div>`;
+      };
       const itemHtml = (pg.items || []).map(it => {
+        const shown = it.shownTakes || {};
+        const rm = `<button class="pe-rm" title="Remove" onclick="removePageItem('${it.id}')">✕</button>`;
         if (it.kind === 'combo') {
           const cb = comboById(it.refId);
-          if (!cb) return `<div class="pe-item"><span class="pe-thumb pe-thumb--combo">▣</span><div class="pe-item__main"><div class="pe-item__name">(combo removed)</div></div><button class="pe-rm" onclick="removePageItem('${it.id}')">✕</button></div>`;
-          const ov = it.takeOverrides || {};
+          if (!cb) return `<div class="pe-item"><span class="pe-thumb pe-thumb--combo">▣</span><div class="pe-item__main"><div class="pe-item__name">(combo removed)</div></div>${rm}</div>`;
           const members = roles.filter(r => cb.slots[r.id]).map(r => {
             const c = byId(cb.slots[r.id]); if (!c) return '';
-            const takes = c.tapes || [];
-            const sel = takes.length
-              ? `<select class="pe-take" onchange="setComboTake('${it.id}','${c.id}',this.value)"><option value="">Latest take</option>${takes.map(t => `<option value="${t.id}" ${ov[c.id] === t.id ? 'selected' : ''}>${esc(t.label || 'Take')}</option>`).join('')}</select>`
-              : `<span class="pe-cmember__notape">No tape</span>`;
-            return `<div class="pe-cmember"><img class="pe-cthumb" src="${esc(photoUrl(c))}" alt=""><span class="pe-cmember__role">${esc(r.name)}</span><span class="pe-cmember__name">${esc(c.name)}</span>${sel}</div>`;
+            return `<div class="pe-cmember">
+              <div class="pe-cmember__top"><img class="pe-cthumb" src="${esc(photoUrl(c))}" alt=""><span class="pe-cmember__role">${esc(r.name)}</span><span class="pe-cmember__name">${esc(c.name)}</span></div>
+              <div class="pe-cmember__takes">${takeChecklist(it.id, c, shown[c.id])}</div></div>`;
           }).join('');
           return `<div class="pe-item pe-item--combo">
-            <div class="pe-combo__head">
-              <span class="pe-thumb pe-thumb--combo">▣</span>
-              <div class="pe-item__main"><div class="pe-item__name">${esc(cb.name)}</div><div class="pe-item__role">Combo · a take for each member</div></div>
-              <button class="pe-rm" title="Remove" onclick="removePageItem('${it.id}')">✕</button>
-            </div>
+            <div class="pe-combo__head"><span class="pe-thumb pe-thumb--combo">▣</span><div class="pe-item__main"><div class="pe-item__name">${esc(cb.name)}</div><div class="pe-item__role">Combo · tick the takes each member shows</div></div>${rm}</div>
             <div class="pe-cmembers">${members}</div></div>`;
         }
         const c = byId(it.refId), r = it.roleId ? roleById(it.roleId) : null;
-        const takes = (c && c.tapes) || [];
-        const takeSel = takes.length
-          ? `<select class="pe-take" onchange="setItemTake('${it.id}',this.value)"><option value="">Latest take</option>${takes.map(t => `<option value="${t.id}" ${it.takeId === t.id ? 'selected' : ''}>${esc(t.label || 'Take')}</option>`).join('')}</select>`
-          : `<span class="pe-item__role" style="color:var(--muted)">No tape</span>`;
-        return `<div class="pe-item">
-          <img class="pe-thumb" src="${esc(c ? photoUrl(c) : '')}" alt="">
-          <div class="pe-item__main"><div class="pe-item__name">${c ? esc(c.name) : '(removed)'}</div><div class="pe-item__role">${r ? esc(r.name) : ''}</div></div>
-          ${takeSel}
-          <button class="pe-rm" title="Remove" onclick="removePageItem('${it.id}')">✕</button></div>`;
+        return `<div class="pe-item pe-item--combo">
+          <div class="pe-combo__head"><img class="pe-thumb" src="${esc(c ? photoUrl(c) : '')}" alt=""><div class="pe-item__main"><div class="pe-item__name">${c ? esc(c.name) : '(removed)'}</div><div class="pe-item__role">${r ? esc(r.name) : ''}</div></div>${rm}</div>
+          ${c ? `<div class="pe-cmembers"><div class="pe-cmember__takes pe-indiv__takes">${takeChecklist(it.id, c, shown[it.refId])}</div></div>` : ''}</div>`;
       }).join('');
 
       const onCand = new Set((pg.items || []).filter(i => i.kind !== 'combo').map(i => i.refId + '|' + (i.roleId || '')));
@@ -1139,16 +1144,16 @@
       try { await api.send('DELETE', `/api/casting/pages/${editingPageId}/items/${itemId}`); bumpPageCount(editingPageId, -1); refreshPageEditor(); render(); }
       catch (e) { if (e.message === 'auth') return; toast('Could not remove.', true); }
     }
-    async function setItemTake(itemId, takeId) {
+    // Toggle a take for an actor: gather every ticked take in that actor's checklist
+    // and store it as the exact set the client sees.
+    async function toggleTake(itemId, candId) {
       if (!editingPageId) return;
-      try { await api.send('PUT', `/api/casting/pages/${editingPageId}/items/${itemId}`, { takeId: takeId || null }); }
-      catch (e) { if (e.message === 'auth') return; toast('Could not set the take.', true); }
-    }
-    // Per-member take pick for a combo item.
-    async function setComboTake(itemId, candId, takeId) {
-      if (!editingPageId) return;
-      try { await api.send('PUT', `/api/casting/pages/${editingPageId}/items/${itemId}`, { takeOverride: { candidateId: candId, takeId: takeId || null } }); }
-      catch (e) { if (e.message === 'auth') return; toast('Could not set the take.', true); }
+      const box = document.querySelector(`.pe-takes[data-item="${itemId}"][data-cand="${candId}"]`);
+      if (!box) return;
+      const takeIds = [...box.querySelectorAll('input:checked')].map(i => i.value);
+      box.querySelectorAll('.pe-takechip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+      try { await api.send('PUT', `/api/casting/pages/${editingPageId}/items/${itemId}`, { takeSet: { candidateId: candId, takeIds } }); }
+      catch (e) { if (e.message === 'auth') return; toast('Could not update takes.', true); }
     }
 
     // "Present to client →" (role) — spin up a page seeded with the role's primary

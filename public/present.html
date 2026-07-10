@@ -39,6 +39,10 @@
   .actor__body{padding:11px 13px 13px}
   .actor__name{font-size:16px;font-weight:600;line-height:1.15}
   .actor__tag{font-family:var(--fm);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-dim);border:1px solid var(--amber-dim);border-radius:20px;padding:2px 8px;margin-top:7px;display:inline-block}
+  .actor__takes{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .actor__take{font-family:var(--fm);font-size:10px;letter-spacing:.04em;color:var(--subtle);background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .actor__take:hover{color:var(--text);border-color:var(--subtle)}
+  .actor__take.on{color:#000;background:var(--amber);border-color:var(--amber);font-weight:600}
 
   .combo{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:20px 20px 22px;margin-bottom:24px}
   .combo__head{display:flex;align-items:baseline;gap:10px;margin-bottom:16px}
@@ -66,17 +70,28 @@
     const photo = a.headshotKey ? media(a.headshotKey) : dice(a.name);
     const roleLine = opts.role ? `<div class="actor__role">${esc(opts.role)}</div>` : '';
     const tag = opts.tag ? `<div class="actor__tag">${esc(opts.tag)}</div>` : '';
-    let mediaBox;
-    if (a.take && a.take.key) {
-      mediaBox = `<video preload="none" playsinline poster="${esc(photo)}"><source src="${esc(media(a.take.key))}"></video>
+    const takes = a.takes || [];
+    let mediaBox, tabs = '';
+    if (takes.length) {
+      mediaBox = `<video preload="none" playsinline poster="${esc(photo)}"><source src="${esc(media(takes[0].key))}"></video>
         <div class="actor__play" onclick="playTape(this)"><span>▶</span></div>`;
+      if (takes.length > 1) {
+        tabs = `<div class="actor__takes">${takes.map((t, i) => `<button class="actor__take${i === 0 ? ' on' : ''}" onclick="switchTake(this,'${esc(media(t.key))}')">${esc(t.label || ('Take ' + (i + 1)))}</button>`).join('')}</div>`;
+      }
     } else {
       mediaBox = `<img src="${esc(photo)}" alt="${esc(a.name)}" loading="lazy"><div class="actor__notape">No tape</div>`;
     }
     return `<div class="actor"><div class="actor__media">${mediaBox}</div>
-      <div class="actor__body">${roleLine}<div class="actor__name">${esc(a.name)}</div>${tag}</div></div>`;
+      <div class="actor__body">${roleLine}<div class="actor__name">${esc(a.name)}</div>${tag}${tabs}</div></div>`;
   }
   function playTape(overlay){ const v = overlay.previousElementSibling; overlay.remove(); v.setAttribute('controls',''); v.play(); }
+  function switchTake(btn, url){
+    const card = btn.closest('.actor');
+    const v = card.querySelector('video');
+    const ov = card.querySelector('.actor__play'); if (ov) ov.remove();
+    v.querySelector('source').src = url; v.load(); v.setAttribute('controls',''); v.play();
+    card.querySelectorAll('.actor__take').forEach(b => b.classList.toggle('on', b === btn));
+  }
 
   function render(data){
     const app = document.getElementById('app');

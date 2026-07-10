@@ -25,18 +25,20 @@ const qItems = db.prepare('SELECT * FROM casting_page_items WHERE page_id = ? OR
 const itemCount = (pid) => db.prepare('SELECT COUNT(*) AS n FROM casting_page_items WHERE page_id = ?').get(pid).n;
 const toPage = (p) => ({ id: p.id, name: p.name, token: p.token, intro: p.intro || '', ord: p.ord, items: itemCount(p.id) });
 
-// The chosen tape for a candidate: the picked take_id if still present, else the
-// lead (first) tape. Returns { id, key, label } or null.
-function chosenTake(candId, takeId) {
+const safeParse = (s) => { try { return JSON.parse(s); } catch (e) { return {}; } };
+
+// The takes a candidate shows on a page, in tape order. `shown` = the explicit set of
+// take ids for this actor (from the page-item's shown_takes); undefined = default =
+// ALL takes; [] = none. Returns [{ id, key, label }].
+function takesFor(candId, shown) {
   const tapes = qTapes.all(candId);
-  if (!tapes.length) return null;
-  const pick = takeId && tapes.find((t) => t.id === takeId);
-  const t = pick || tapes[0];
-  return { id: t.id, key: t.key, label: t.label || '' };
+  if (!tapes.length) return [];
+  const list = Array.isArray(shown) ? tapes.filter((t) => shown.includes(t.id)) : tapes;
+  return list.map((t) => ({ id: t.id, key: t.key, label: t.label || '' }));
 }
-// Actor as the client sees them: name + photo key + the one take that plays.
-function actorShape(cand, takeId) {
-  return { name: cand.name, headshotKey: cand.headshot_key || null, take: chosenTake(cand.id, takeId) };
+// Actor as the client sees them: name + photo key + the takes that play (0..n).
+function actorShape(cand, shown) {
+  return { name: cand.name, headshotKey: cand.headshot_key || null, takes: takesFor(cand.id, shown) };
 }
 
 // Resolve a page into the client-facing lookbook (ordered items; media as keys the
@@ -44,15 +46,15 @@ function actorShape(cand, takeId) {
 function buildLookbook(page) {
   const out = [];
   for (const it of qItems.all(page.id)) {
+    const shown = it.shown_takes ? safeParse(it.shown_takes) : {};
     if (it.kind === 'combo') {
       const combo = db.prepare('SELECT * FROM casting_combos WHERE id = ?').get(it.ref_id);
       if (!combo) continue;
       const slots = db.prepare('SELECT role_id, candidate_id FROM casting_combo_slots WHERE combo_id = ? ORDER BY ord').all(combo.id);
-      const ov = it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {};
       const roles = slots.map((s) => {
         const role = qRoleRow.get(s.role_id), cand = qCandRow.get(s.candidate_id);
         if (!role || !cand) return null;
-        return { role: { name: role.name, character: role.character }, actor: actorShape(cand, ov[cand.id] || null) };
+        return { role: { name: role.name, character: role.character }, actor: actorShape(cand, shown[cand.id]) };
       }).filter(Boolean);
       if (roles.length) out.push({ kind: 'combo', name: combo.name, grp: combo.grp || '', roles });
     } else {
@@ -63,7 +65,7 @@ function buildLookbook(page) {
       out.push({
         kind: 'individual',
         role: role ? { name: role.name, character: role.character } : null,
-        actor: actorShape(cand, it.take_id),
+        actor: actorShape(cand, shown[it.ref_id]),
         backup: !!(asg && asg.rank === 'backup'),
       });
     }
@@ -88,8 +90,8 @@ producer.get('/pages/:id', (req, res) => {
   if (!page) return res.status(404).json({ error: 'page_not_found' });
   const items = qItems.all(page.id).map((it) => ({
     id: it.id, kind: it.kind, refId: it.ref_id, roleId: it.role_id || null,
-    takeId: it.take_id || null, showBackup: !!it.show_backup, ord: it.ord,
-    takeOverrides: it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {},
+    showBackup: !!it.show_backup, ord: it.ord,
+    shownTakes: it.shown_takes ? safeParse(it.shown_takes) : {},
   }));
   res.json({ ...toPage(page), items });
 });
@@ -167,20 +169,20 @@ producer.put('/pages/:id/items/:itemId', (req, res) => {
   if (!page) return res.status(404).json({ error: 'page_not_found' });
   const it = db.prepare('SELECT * FROM casting_page_items WHERE id = ? AND page_id = ?').get(req.params.itemId, page.id);
   if (!it) return res.status(404).json({ error: 'item_not_found' });
-  const takeId = req.body?.takeId !== undefined ? (req.body.takeId ? String(req.body.takeId) : null) : it.take_id;
   const showBackup = req.body?.showBackup !== undefined ? (req.body.showBackup ? 1 : 0) : it.show_backup;
   const ord = req.body?.ord !== undefined ? Number(req.body.ord) : it.ord;
-  // Per-member take pick for a combo: { candidateId, takeId } merges into the JSON map.
-  let overrides = it.take_overrides;
-  const to = req.body?.takeOverride;
-  if (to && to.candidateId) {
-    const map = it.take_overrides ? (() => { try { return JSON.parse(it.take_overrides); } catch (e) { return {}; } })() : {};
-    if (to.takeId) map[String(to.candidateId)] = String(to.takeId); else delete map[String(to.candidateId)];
-    overrides = JSON.stringify(map);
+  // The exact set of takes an actor shows: { candidateId, takeIds:[...] } replaces that
+  // actor's entry in the shown_takes map (covers individuals + combo members).
+  let shownTakes = it.shown_takes;
+  const ts = req.body?.takeSet;
+  if (ts && ts.candidateId) {
+    const map = it.shown_takes ? safeParse(it.shown_takes) : {};
+    map[String(ts.candidateId)] = Array.isArray(ts.takeIds) ? ts.takeIds.map(String) : [];
+    shownTakes = JSON.stringify(map);
   }
-  db.prepare('UPDATE casting_page_items SET take_id = ?, show_backup = ?, ord = ?, take_overrides = ? WHERE id = ?').run(takeId, showBackup, ord, overrides, it.id);
+  db.prepare('UPDATE casting_page_items SET show_backup = ?, ord = ?, shown_takes = ? WHERE id = ?').run(showBackup, ord, shownTakes, it.id);
   db.prepare("UPDATE casting_pages SET updated_at = datetime('now') WHERE id = ?").run(page.id);
-  res.json({ id: it.id, takeId, showBackup: !!showBackup, ord, takeOverrides: overrides ? JSON.parse(overrides) : {} });
+  res.json({ id: it.id, showBackup: !!showBackup, ord, shownTakes: shownTakes ? safeParse(shownTakes) : {} });
 });
 
 producer.delete('/pages/:id/items/:itemId', (req, res) => {

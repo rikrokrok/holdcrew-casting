@@ -268,9 +268,29 @@ db.exec(`
 
 // Per-member take picks for a COMBO page-item (individuals use take_id). JSON map
 // { candidateId: takeId } — which tape each combo member plays on the client page.
-// Added after ship; idempotent.
+// Added after ship; idempotent. (Superseded by shown_takes below, kept for the seed.)
 if (!db.prepare('PRAGMA table_info(casting_page_items)').all().some((c) => c.name === 'take_overrides')) {
   db.exec('ALTER TABLE casting_page_items ADD COLUMN take_overrides TEXT');
+}
+
+// The EXACT set of takes each actor shows on a page — the client watches precisely
+// these (a per-take toggle in the editor). JSON map { candidateId: [takeId, ...] },
+// covering both individuals (ref_id) and combo members. Missing entry = default (lead
+// take only); [] = headshot only. Supersedes the single take_id / take_overrides pick;
+// one-time seed converts those into single-element sets. Idempotent.
+if (!db.prepare('PRAGMA table_info(casting_page_items)').all().some((c) => c.name === 'shown_takes')) {
+  db.exec('ALTER TABLE casting_page_items ADD COLUMN shown_takes TEXT');
+  const rows = db.prepare('SELECT id, kind, ref_id, take_id, take_overrides FROM casting_page_items WHERE shown_takes IS NULL').all();
+  const upd = db.prepare('UPDATE casting_page_items SET shown_takes = ? WHERE id = ?');
+  for (const r of rows) {
+    let map = null;
+    if (r.kind === 'combo' && r.take_overrides) {
+      try { const ov = JSON.parse(r.take_overrides); map = {}; for (const [c, t] of Object.entries(ov)) if (t) map[c] = [t]; } catch (e) { /* skip */ }
+    } else if (r.kind !== 'combo' && r.take_id) {
+      map = { [r.ref_id]: [r.take_id] };
+    }
+    if (map && Object.keys(map).length) upd.run(JSON.stringify(map), r.id);
+  }
 }
 
 // Migrate the legacy single tape_key -> a casting_media 'Take 1' row. Idempotent
