@@ -100,7 +100,11 @@ Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, 
   delete) + a page editor (name, share link, intro, ordered items with per-actor take-picker + remove, combos,
   role-grouped "Add to page" chips); **Present to client →** (role + combo review) spins up a seeded page.
   Server mounted in `src/server.js` (`/present/:token` serves the viewer). Client approval stays manual: the
-  PM ticks Client-approved on the pipeline. Deferred (v1): per-member combo take override; drag reorder.
+  PM ticks Client-approved on the pipeline. **Take selection = per-take toggle set** (2026-07-10):
+  `casting_page_items.shown_takes` JSON `{ candidateId: [takeId,...] }` (default = ALL takes; explicit
+  set = exactly those; [] = none), covering individuals + combo members; editor = a checkbox per take
+  (all-ticked default), client card shows the ticked takes with a take-tab switcher when >1. Deferred:
+  drag reorder of page items.
 - Also: `CASTING_DATA_DIR` env now overrides the SQLite dir (used to migrate/verify against a DB copy).
 **NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
 simplification, transcode-to-spec decision.
