@@ -333,6 +333,56 @@
     .cr-act:hover { filter: brightness(1.1); }
     .cr-note { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); padding: 0 18px 14px; background: var(--surface-raised); line-height: 1.5; }
 
+    /* ── client pages: cards + editor ── */
+    .page-cards { display: flex; flex-direction: column; gap: 8px; }
+    .page-card { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .page-card__main { flex: 1; min-width: 0; padding: 12px 16px; cursor: pointer; }
+    .page-card__main:hover { background: var(--surface-mid); }
+    .page-card__name { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.03em; color: var(--text); }
+    .page-card__meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .page-card__acts { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-left: 1px solid var(--border-inner); }
+    .pg-act { background: none; border: none; color: var(--subtle); cursor: pointer; font-size: 13px; padding: 6px 7px; border-radius: 5px; }
+    .pg-act:hover { color: var(--text); background: var(--surface-mid); }
+    .pg-act--del:hover { color: var(--red); }
+
+    .pe-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); width: min(620px, 95vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+    .pe-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border-inner); background: var(--surface-raised); }
+    .pe-name { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 24px; letter-spacing: 0.03em; color: var(--text); background: none; border: none; padding: 2px 0; }
+    .pe-name:focus { outline: none; color: var(--amber); }
+    .pe-close { background: none; border: none; color: var(--subtle); font-size: 24px; line-height: 1; cursor: pointer; }
+    .pe-close:hover { color: var(--text); }
+    .pe-body { padding: 14px 18px; overflow-y: auto; }
+    .pe-link { display: flex; align-items: center; gap: 6px; background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 6px 6px 11px; margin-bottom: 14px; }
+    .pe-link input { flex: 1; min-width: 0; background: none; border: none; color: var(--subtle); font-family: var(--font-mono); font-size: 11px; }
+    .pe-link input:focus { outline: none; }
+    .pe-linkbtn { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--amber); background: none; border: 1px solid var(--amber-dim); border-radius: var(--radius); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    .pe-linkbtn:hover { background: rgba(245,166,35,0.08); }
+    .pe-linkbtn--ghost { color: var(--subtle); border-color: var(--border); }
+    .pe-intro { width: 100%; font-family: var(--font-body); font-size: 12.5px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 18px; resize: vertical; min-height: 40px; }
+    .pe-intro:focus { outline: none; border-color: var(--amber); }
+    .pe-seclabel { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 4px 0 9px; }
+    .pe-items { display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px; }
+    .pe-empty { font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding: 8px 2px 14px; }
+    .pe-item { display: flex; align-items: center; gap: 11px; padding: 8px; background: var(--surface-mid); border: 1px solid var(--border); border-radius: var(--radius); }
+    .pe-thumb { width: 38px; height: 46px; border-radius: 5px; object-fit: cover; background: var(--surface-raised); flex-shrink: 0; }
+    .pe-thumb--combo { display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--amber); border: 1px solid var(--border); }
+    .pe-item__main { flex: 1; min-width: 0; }
+    .pe-item__name { font-size: 13.5px; color: var(--text); }
+    .pe-item__role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber); margin-top: 2px; }
+    .pe-take { font-family: var(--font-mono); font-size: 10.5px; color: var(--text); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 7px; cursor: pointer; max-width: 130px; }
+    .pe-take:focus { outline: none; border-color: var(--amber); }
+    .pe-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 4px; flex-shrink: 0; }
+    .pe-rm:hover { color: var(--red); }
+    .pe-add { border-top: 1px solid var(--border-inner); padding-top: 14px; }
+    .pe-addrole { margin-bottom: 12px; }
+    .pe-addrole__label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber-dim); margin-bottom: 6px; }
+    .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pe-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text); background: var(--surface-mid); border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px 3px 4px; cursor: pointer; }
+    .pe-chip:hover { border-color: var(--amber); }
+    .pe-chip img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+    .pe-chip--combo { padding-left: 11px; color: var(--amber); }
+    .pe-chip__none { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); font-style: italic; }
+
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
     .d-item { min-width: 0; }
     .d-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
@@ -417,6 +467,11 @@
     <div class="cr-modal" id="combo-review" onclick="event.stopPropagation()"></div>
   </div>
 
+  <!-- client page editor -->
+  <div class="modal-back hidden" id="page-editor-back" onclick="closePageEditor(event)">
+    <div class="pe-modal" id="page-editor" onclick="event.stopPropagation()"></div>
+  </div>
+
   <!-- import CSV modal -->
   <div class="modal-back hidden" id="imp-back" onclick="closeImport(event)">
     <div class="import-box" onclick="event.stopPropagation()">
@@ -498,9 +553,11 @@
     let roles = [];
     let cands = [];
     let combos = [];
+    let pages = [];
     const byId = id => cands.find(c => c.id === id);
     const roleById = id => roles.find(r => r.id === id);
     const comboById = id => combos.find(c => c.id === id);
+    const pageById = id => pages.find(p => p.id === id);
 
     // Headshot: real uploaded headshot (Wasabi, presigned via /media) when set,
     // else a stable placeholder avatar keyed on the name so cards aren't blank.
@@ -520,9 +577,11 @@
         roles = board.roles || [];
         cands = board.candidates || [];
         combos = board.combos || [];
+        pages = board.pages || [];
         render();
         const openId = params.get('open'); if (openId && byId(openId)) openDrawer(openId); // deep-link a drawer
         const revId = params.get('review'); if (revId && comboById(revId)) openComboReview(revId); // deep-link a combo review
+        const pgId = params.get('page'); if (pgId && pageById(pgId)) openPageEditor(pgId); // deep-link a page editor
       } catch (e) {
         if (e.message === 'auth') return;
         el.innerHTML = `<div class="load-err">Couldn't load casting. <a href="#" onclick="loadBoard();return false;">Retry</a></div>`;
@@ -638,7 +697,36 @@
       if (!roles.length) return html + `<div class="cast-empty"><p>Add a role to start building selects.</p></div>`;
       html += roles.map(roleSection).join('');
       html += combosSection();
+      html += pagesSection();
       return html;
+    }
+
+    // ── CLIENT PAGES: curated, named lookbooks — a passive tokenized link the
+    // client reviews (see /present/<token>). Assign individuals and/or combos;
+    // per actor pick which take plays. Approvals come back off-platform → you tick
+    // Client-approved on the pipeline. (spec §"Client presentation = curated pages")
+    function pagesSection() {
+      let html = `<div class="combos-bar" style="margin-top:1.4rem">
+        <span class="combos-bar__label">Client pages</span>
+        <span class="combos-bar__hint">Curate a lookbook to send — pick who the client sees and which take plays.</span>
+        <button class="add-combo-btn" onclick="newPage()">+ New page</button>
+      </div>`;
+      if (!pages.length) return html + `<div class="combos-empty">No pages yet. Build one to present the client a curated selection.</div>`;
+      html += `<div class="page-cards">${pages.map(pageCard).join('')}</div>`;
+      return html;
+    }
+    function pageCard(pg) {
+      return `<div class="page-card">
+        <div class="page-card__main" onclick="openPageEditor('${pg.id}')">
+          <div class="page-card__name">${esc(pg.name)}</div>
+          <div class="page-card__meta">${pg.items} ${pg.items === 1 ? 'item' : 'items'}</div>
+        </div>
+        <div class="page-card__acts">
+          <button class="pg-act" title="Copy client link" onclick="event.stopPropagation();copyPageLink('${pg.token}')">🔗</button>
+          <button class="pg-act" title="Open the client view" onclick="event.stopPropagation();openPagePreview('${pg.token}')">↗</button>
+          <button class="pg-act pg-act--del" title="Delete page" onclick="event.stopPropagation();deletePage('${pg.id}')">✕</button>
+        </div>
+      </div>`;
     }
 
     // ── COMBINATIONS: named, freely-labelled assembled casts (client options) ──
@@ -762,9 +850,15 @@
       await setSlot(cbId, roleId, candId);
       if (reviewOpen) openComboReview(cbId);   // return to the review with the new pick shown
     }
-    function presentCombo(id) {
-      const cb = comboById(id);
-      alert(`Client presentation for "${cb ? cb.name : ''}" — the passive assembled-cast lookbook — is the next slice to build (task 7).`);
+    // "Present to client →" (combo) — spin up a page seeded with this combo, open the editor.
+    async function presentCombo(id) {
+      const cb = comboById(id); if (!cb) return;
+      try {
+        const pg = await api.send('POST', '/api/casting/pages', { job: JOB, name: cb.name });
+        await api.send('POST', `/api/casting/pages/${pg.id}/items`, { kind: 'combo', refId: id });
+        pg.items = 1; pages.push(pg); render();
+        closeComboReview(); openPageEditor(pg.id);
+      } catch (e) { if (e.message === 'auth') return; alert('Could not start the page.'); }
     }
 
     // ── combo review window: see the assembled cast big, then commit the whole
@@ -901,9 +995,138 @@
         alert(e.message === 'role_exists' ? 'That role already exists.' : 'Could not add the role.');
       }
     }
-    function presentRole(id) {
-      const r = roleById(id);
-      alert(`Client presentation for "${r ? r.name : ''}" — the passive photo + name + tape review page — is the next slice to build (task 7).`);
+    // ── CLIENT PAGE builder: curate a page, then it's a passive /present/<token> link ──
+    let editingPageId = null;
+    const pageUrl = token => `${location.origin}/present/${token}`;
+    function openPagePreview(token) { window.open(pageUrl(token), '_blank'); }
+    async function copyPageLink(token) {
+      try { await navigator.clipboard.writeText(pageUrl(token)); toast('Client link copied.'); }
+      catch (e) { toast(pageUrl(token)); }
+    }
+    async function newPage() {
+      const name = (prompt('Name this client page (e.g. "Client Round 1", "Lead options"):') || '').trim();
+      if (!name) return;
+      try { const pg = await api.send('POST', '/api/casting/pages', { job: JOB, name }); pages.push(pg); render(); openPageEditor(pg.id); }
+      catch (e) { if (e.message === 'auth') return; alert('Could not create the page.'); }
+    }
+    async function deletePage(id) {
+      const pg = pageById(id); if (!pg) return;
+      if (!confirm(`Delete client page "${pg.name}"? The share link stops working.`)) return;
+      try { await api.send('DELETE', '/api/casting/pages/' + id); pages = pages.filter(p => p.id !== id); render(); }
+      catch (e) { if (e.message === 'auth') return; alert('Could not delete.'); }
+    }
+    function bumpPageCount(id, d) { const pg = pageById(id); if (pg) pg.items = Math.max(0, (pg.items || 0) + d); }
+
+    async function openPageEditor(id) {
+      try {
+        const detail = await api.get('/api/casting/pages/' + id);
+        editingPageId = id;
+        document.getElementById('page-editor').innerHTML = pageEditorHtml(detail);
+        document.getElementById('page-editor-back').classList.remove('hidden');
+      } catch (e) { if (e.message === 'auth') return; alert('Could not open the page.'); }
+    }
+    function closePageEditor(e) {
+      if (e && e.target !== document.getElementById('page-editor-back')) return;
+      document.getElementById('page-editor-back').classList.add('hidden');
+      editingPageId = null;
+    }
+    const refreshPageEditor = () => editingPageId && openPageEditor(editingPageId);
+
+    function pageEditorHtml(pg) {
+      const itemHtml = (pg.items || []).map(it => {
+        if (it.kind === 'combo') {
+          const cb = comboById(it.refId);
+          const n = cb ? Object.keys(cb.slots || {}).length : 0;
+          return `<div class="pe-item">
+            <span class="pe-thumb pe-thumb--combo">▣</span>
+            <div class="pe-item__main"><div class="pe-item__name">${cb ? esc(cb.name) : '(combo removed)'}</div><div class="pe-item__role">Combo · ${n} ${n === 1 ? 'role' : 'roles'}</div></div>
+            <button class="pe-rm" title="Remove" onclick="removePageItem('${it.id}')">✕</button></div>`;
+        }
+        const c = byId(it.refId), r = it.roleId ? roleById(it.roleId) : null;
+        const takes = (c && c.tapes) || [];
+        const takeSel = takes.length
+          ? `<select class="pe-take" onchange="setItemTake('${it.id}',this.value)"><option value="">Latest take</option>${takes.map(t => `<option value="${t.id}" ${it.takeId === t.id ? 'selected' : ''}>${esc(t.label || 'Take')}</option>`).join('')}</select>`
+          : `<span class="pe-item__role" style="color:var(--muted)">No tape</span>`;
+        return `<div class="pe-item">
+          <img class="pe-thumb" src="${esc(c ? photoUrl(c) : '')}" alt="">
+          <div class="pe-item__main"><div class="pe-item__name">${c ? esc(c.name) : '(removed)'}</div><div class="pe-item__role">${r ? esc(r.name) : ''}</div></div>
+          ${takeSel}
+          <button class="pe-rm" title="Remove" onclick="removePageItem('${it.id}')">✕</button></div>`;
+      }).join('');
+
+      const onCand = new Set((pg.items || []).filter(i => i.kind !== 'combo').map(i => i.refId + '|' + (i.roleId || '')));
+      const onCombo = new Set((pg.items || []).filter(i => i.kind === 'combo').map(i => i.refId));
+      const roleAdders = roles.map(r => {
+        const pool = cands.filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]) && !onCand.has(c.id + '|' + r.id));
+        if (!pool.length) return '';
+        return `<div class="pe-addrole"><div class="pe-addrole__label">${esc(r.name)}</div><div class="pe-chips">${
+          pool.map(c => `<button class="pe-chip" onclick="addPageActor('${c.id}','${r.id}')"><img src="${esc(photoUrl(c))}" alt="">${esc(c.name)}</button>`).join('')}</div></div>`;
+      }).filter(Boolean).join('');
+      const comboPool = combos.filter(cb => !onCombo.has(cb.id));
+      const comboAdder = comboPool.length
+        ? `<div class="pe-addrole"><div class="pe-addrole__label">Combinations</div><div class="pe-chips">${comboPool.map(cb => `<button class="pe-chip pe-chip--combo" onclick="addPageCombo('${cb.id}')">▣ ${esc(cb.name)}</button>`).join('')}</div></div>`
+        : '';
+      const adders = (roleAdders || comboAdder) ? roleAdders + comboAdder : `<div class="pe-chip__none">Everyone shortlisted is already on this page.</div>`;
+
+      return `
+        <div class="pe-head">
+          <input class="pe-name" value="${esc(pg.name)}" onchange="renamePage('${pg.id}',this.value)">
+          <button class="pe-close" onclick="closePageEditor()">&times;</button>
+        </div>
+        <div class="pe-body">
+          <div class="pe-link">
+            <input readonly value="${esc(pageUrl(pg.token))}" onclick="this.select()">
+            <button class="pe-linkbtn" onclick="copyPageLink('${pg.token}')">Copy</button>
+            <button class="pe-linkbtn pe-linkbtn--ghost" onclick="openPagePreview('${pg.token}')">Open ↗</button>
+          </div>
+          <textarea class="pe-intro" placeholder="Optional note shown atop the client page…" onchange="setPageIntro('${pg.id}',this.value)">${esc(pg.intro || '')}</textarea>
+          <div class="pe-seclabel">On this page — in order</div>
+          <div class="pe-items">${itemHtml || '<div class="pe-empty">Nothing yet — add actors or a combo below.</div>'}</div>
+          <div class="pe-add"><div class="pe-seclabel">Add to page</div>${adders}</div>
+        </div>`;
+    }
+
+    async function renamePage(id, name) {
+      const pg = pageById(id); name = (name || '').trim();
+      if (!pg || !name || name === pg.name) return;
+      try { const r = await api.send('PUT', '/api/casting/pages/' + id, { name }); pg.name = r.name; render(); }
+      catch (e) { if (e.message === 'auth') return; }
+    }
+    async function setPageIntro(id, intro) {
+      try { await api.send('PUT', '/api/casting/pages/' + id, { intro: (intro || '').trim() }); }
+      catch (e) { if (e.message === 'auth') return; }
+    }
+    async function addPageActor(candId, roleId) {
+      if (!editingPageId) return;
+      try { await api.send('POST', `/api/casting/pages/${editingPageId}/items`, { kind: 'individual', refId: candId, roleId }); bumpPageCount(editingPageId, 1); refreshPageEditor(); render(); }
+      catch (e) { if (e.message === 'auth') return; toast('Could not add.', true); }
+    }
+    async function addPageCombo(comboId) {
+      if (!editingPageId) return;
+      try { await api.send('POST', `/api/casting/pages/${editingPageId}/items`, { kind: 'combo', refId: comboId }); bumpPageCount(editingPageId, 1); refreshPageEditor(); render(); }
+      catch (e) { if (e.message === 'auth') return; toast('Could not add.', true); }
+    }
+    async function removePageItem(itemId) {
+      if (!editingPageId) return;
+      try { await api.send('DELETE', `/api/casting/pages/${editingPageId}/items/${itemId}`); bumpPageCount(editingPageId, -1); refreshPageEditor(); render(); }
+      catch (e) { if (e.message === 'auth') return; toast('Could not remove.', true); }
+    }
+    async function setItemTake(itemId, takeId) {
+      if (!editingPageId) return;
+      try { await api.send('PUT', `/api/casting/pages/${editingPageId}/items/${itemId}`, { takeId: takeId || null }); }
+      catch (e) { if (e.message === 'auth') return; toast('Could not set the take.', true); }
+    }
+
+    // "Present to client →" (role) — spin up a page seeded with the role's primary
+    // selects, then open the editor to curate/send.
+    async function presentRole(id) {
+      const r = roleById(id); if (!r) return;
+      const primaries = cands.filter(c => c.assignments && id in c.assignments && onSelects(c.assignments[id]) && pipeFor(c, id).rank !== 'backup');
+      try {
+        const pg = await api.send('POST', '/api/casting/pages', { job: JOB, name: `${r.name} — client` });
+        for (const c of primaries) await api.send('POST', `/api/casting/pages/${pg.id}/items`, { kind: 'individual', refId: c.id, roleId: id });
+        pg.items = primaries.length; pages.push(pg); render(); openPageEditor(pg.id);
+      } catch (e) { if (e.message === 'auth') return; alert('Could not start the page.'); }
     }
 
     // ── pipeline: three axes per (candidate × role) — see src/pipeline.js ──
