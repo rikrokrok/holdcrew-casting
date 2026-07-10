@@ -876,7 +876,10 @@
     }
     // Tapping a member's status in the review changes it (not swap the actor): jump to
     // that actor's drawer, where the progress strip / rank / disposition live.
-    function comboMemberStatus(candId) { closeComboReview(); openDrawer(candId); }
+    // Tapping a member's status opens their drawer to change it, remembering the combo
+    // so closing the drawer drops you back INTO the review (not out to the board).
+    let comboReviewReturn = null;
+    function comboMemberStatus(candId, comboId) { comboReviewReturn = comboId; closeComboReview(); openDrawer(candId); }
     function comboReviewHtml(cb) {
       // Every role is a swappable slot right here — tap to change (or fill/clear)
       // the pick without leaving the review. Empty roles show too, so a combo can
@@ -898,7 +901,7 @@
           <div class="cr-info">
             <div class="cr-role">${roleLabel(r)}</div>
             <div class="cr-name">${esc(c.name)}</div>
-            <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? `<span class="cr-statustap" title="Change status" onclick="event.stopPropagation();comboMemberStatus('${c.id}')">${statusBadge(st)}</span>` : ''}</div>
+            <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? `<span class="cr-statustap" title="Change status" onclick="event.stopPropagation();comboMemberStatus('${c.id}','${cb.id}')">${statusBadge(st)}</span>` : ''}</div>
           </div>
         </div>`;
       }).join('') : `<div class="cr-empty">No roles yet — add roles on the Selects tab first.</div>`;
@@ -1297,6 +1300,8 @@
     function closeDrawer(e) {
       if (e && e.target !== document.getElementById('dr-back')) return;
       document.getElementById('dr-back').classList.add('hidden');
+      // Came here from a combo review? Reopen it (refreshed with the change).
+      if (comboReviewReturn) { const id = comboReviewReturn; comboReviewReturn = null; openComboReview(id); }
     }
     function drawerHtml(c) {
       const nt = (c.tapes || []).length;
