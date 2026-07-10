@@ -89,12 +89,18 @@ Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, 
   returns 'backup' for a rank=backup contender on the selects board (supersedes shortlist/recco/approved so
   the tap is visible; Booked/Confirmed still wins), progress ticks preserved — flow is select-FIRST then
   relegate to backup (Eric 2026-07-10).
-- **Step 3 (presentation pages, task 7) — BUILDING (started 2026-07-10).** The curated client lookbook the
-  "Present to client →" buttons (roleSection + combo review, currently `presentRole`/`presentCombo` stubs)
-  are waiting on: a first-class named, multi-instance page object (create → name → assign individuals and/or
-  combos), per-page take pick + backup show/hide + order, a passive tokenized viewer; client reviews off-
-  platform and the PM records approval back on the pipeline (Client-approved tick). Data: `casting_pages` +
-  `casting_page_items` (see PLAN.md §"Data-model deltas").
+- **Step 3 (presentation pages, task 7) — DONE + LIVE (cut over 2026-07-10).** Curated client lookbooks.
+  Data: `casting_pages` (name, unguessable `token`, intro, ord) + `casting_page_items` (kind individual|combo,
+  ref_id, role_id, take_id, show_backup, ord). Server `src/pages.js`: producer router (gated, `/api/casting/
+  pages…` CRUD + item CRUD + token rotate) and public router (ungated) `/present/:token/data` (lookbook JSON)
+  + `/present/:token/media` (token-scoped presign — key must match the page's tenant; verified 403 on foreign
+  keys). Public viewer `public/present.html` = passive lookbook (masthead + intro, roles with option cards
+  poster=headshot→tap-to-play the chosen take, an "Also considering" backups row, combos as family blocks;
+  no login/controls). Producer UI in `casting.html` (Selects tab): a **Client pages** section (copy-link/open/
+  delete) + a page editor (name, share link, intro, ordered items with per-actor take-picker + remove, combos,
+  role-grouped "Add to page" chips); **Present to client →** (role + combo review) spins up a seeded page.
+  Server mounted in `src/server.js` (`/present/:token` serves the viewer). Client approval stays manual: the
+  PM ticks Client-approved on the pipeline. Deferred (v1): per-member combo take override; drag reorder.
 - Also: `CASTING_DATA_DIR` env now overrides the SQLite dir (used to migrate/verify against a DB copy).
 **NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
 simplification, transcode-to-spec decision.
