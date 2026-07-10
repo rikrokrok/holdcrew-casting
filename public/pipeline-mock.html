@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pipeline audit — mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a; --surface:#111; --surface-mid:#161616; --surface-raised:#1c1c1c;
+    --border:#2a2a2a; --border-inner:#1e1e1e;
+    --amber:#f5a623; --amber-dim:#c47f00; --text:#e0e0e0; --subtle:#888; --muted:#555; --dim:#333;
+    --green:#3ecf70; --red:#e05c5c; --teal:#5bbfb5;
+    --font-display:'Bebas Neue',Impact,sans-serif; --font-mono:'DM Mono',Consolas,monospace; --font-body:'DM Sans',Helvetica,Arial,sans-serif;
+    --radius:6px; --radius-lg:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;padding:0 0 80px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 18px}
+  .mockbar{background:linear-gradient(90deg,rgba(245,166,35,.14),rgba(245,166,35,.02));border-bottom:1px solid var(--amber-dim);padding:9px 18px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber)}
+  h1{font-family:var(--font-display);font-size:52px;letter-spacing:.03em;font-weight:400;margin:26px 0 2px}
+  .sub{font-family:var(--font-mono);font-size:11.5px;color:var(--subtle);letter-spacing:.02em;margin-bottom:8px}
+  h2{font-family:var(--font-display);font-size:26px;letter-spacing:.04em;font-weight:400;color:var(--text);margin:38px 0 4px;padding-top:22px;border-top:1px solid var(--border)}
+  .h2note{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-bottom:20px}
+
+  /* ── talent detail card (drawer preview) ── */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px 22px;margin-bottom:16px}
+  .card__top{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+  .avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:var(--surface-mid);flex-shrink:0}
+  .who{flex:1;min-width:0}
+  .who__name{font-family:var(--font-display);font-size:26px;letter-spacing:.02em;line-height:1}
+  .who__role{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-top:4px}
+  .stage-pill{font-family:var(--font-mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:5px 10px;border-radius:20px;white-space:nowrap;align-self:flex-start}
+
+  /* ── progress strip ── */
+  .strip{display:flex;align-items:flex-start;position:relative}
+  .node{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;background:none;border:none;cursor:pointer;padding:0;color:inherit;font-family:inherit}
+  .node .rail{position:absolute;top:15px;left:-50%;width:100%;height:2px;background:var(--dim);z-index:0}
+  .node:first-child .rail{display:none}
+  .dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;border:2px solid var(--dim);background:var(--surface);font-size:15px;transition:all .15s ease}
+  .node.on .rail{background:var(--amber-dim)}
+  .node.on .dot{border-color:var(--amber);background:var(--amber);color:#000}
+  .node.on.tier-book .dot{border-color:var(--teal);background:var(--teal)}
+  .node.on.tier-book .rail{background:var(--teal)}
+  .node.on.tier-confirm .dot{border-color:var(--green);background:var(--green)}
+  .node.on.tier-confirm .rail{background:var(--green)}
+  .node.gap .dot{border-style:dashed;border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,.08);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,166,35,.35)}50%{box-shadow:0 0 0 5px rgba(245,166,35,0)}}
+  .node__label{font-family:var(--font-mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--subtle);margin-top:9px;text-align:center;line-height:1.3}
+  .node.on .node__label{color:var(--text)}
+  .node.gap .node__label{color:var(--amber)}
+  .node__time{font-family:var(--font-mono);font-size:8.5px;color:var(--muted);margin-top:3px;height:11px;text-align:center}
+  .node.gap .node__time{color:var(--amber-dim)}
+
+  /* ── rank + disposition axes ── */
+  .axes{display:flex;gap:26px;flex-wrap:wrap;margin-top:26px;padding-top:18px;border-top:1px solid var(--border-inner)}
+  .axis__label{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .seg button{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;background:none;border:none;color:var(--subtle);padding:7px 14px;cursor:pointer}
+  .seg button+button{border-left:1px solid var(--border)}
+  .seg button.on{background:var(--surface-raised);color:var(--text)}
+  .seg button.on.warn{color:var(--red)}
+  .chip-row{display:flex;gap:8px}
+  .chip{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;background:none;border:1px solid var(--border);border-radius:20px;color:var(--subtle);padding:7px 14px;cursor:pointer}
+  .chip.on{border-color:var(--red);color:var(--red);background:rgba(224,92,92,.08)}
+  .flag-line{margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--amber);display:flex;align-items:center;gap:7px;min-height:16px}
+  .flag-line.hidden{display:none}
+
+  /* ── audit list ── */
+  .audit{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+  .arow{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border-inner)}
+  .arow:last-child{border-bottom:none}
+  .arow:hover{background:var(--surface-mid)}
+  .arow.passed{opacity:.42}
+  .aperson{min-width:0}
+  .aperson__name{font-family:var(--font-mono);font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .aperson__role{font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-top:2px}
+  .mini{display:flex;align-items:center;gap:0}
+  .mini i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--dim);background:var(--surface);display:block}
+  .mini .bar{width:12px;height:1.5px;background:var(--dim)}
+  .mini i.on{border-color:var(--amber);background:var(--amber)}
+  .mini i.on.b{border-color:var(--teal);background:var(--teal)}
+  .mini i.on.c{border-color:var(--green);background:var(--green)}
+  .mini .bar.on{background:var(--amber-dim)}
+  .mini i.gap{border-style:dashed;border-color:var(--amber);background:rgba(245,166,35,.12)}
+  .aend{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+  .badge{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;border-radius:4px;white-space:nowrap}
+  .b-gap{color:var(--amber);border:1px solid var(--amber-dim);background:rgba(245,166,35,.06)}
+  .b-backup{color:var(--teal);border:1px solid var(--teal)}
+  .b-unavail{color:var(--red);border:1px solid var(--red)}
+  .b-stage{color:var(--subtle);border:1px solid var(--border)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 2px 0;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dotk{width:10px;height:10px;border-radius:50%;display:inline-block}
+</style>
+</head>
+<body>
+<div class="mockbar">◆ Mock — step 2 audit UI preview · not wired to data · tap the nodes</div>
+<div class="wrap">
+  <h1>Pipeline audit</h1>
+  <div class="sub">three axes per talent × role — progress · rank · disposition</div>
+
+  <h2>Talent detail</h2>
+  <div class="h2note">the progress strip that replaces the Hold/Book buttons in the drawer — five independent, timestamped ticks</div>
+
+  <div class="card" id="detail">
+    <div class="card__top">
+      <img class="avatar" src="https://i.pravatar.cc/104?img=12" alt="">
+      <div class="who">
+        <div class="who__name">Marcus Reyes</div>
+        <div class="who__role">LEAD · “The Writer”</div>
+      </div>
+      <div class="stage-pill" id="stagePill"></div>
+    </div>
+    <div class="strip" id="strip"></div>
+    <div class="axes">
+      <div>
+        <div class="axis__label">Rank</div>
+        <div class="seg" id="rankSeg">
+          <button data-rank="primary" class="on">Primary</button>
+          <button data-rank="backup">Backup</button>
+        </div>
+      </div>
+      <div>
+        <div class="axis__label">Disposition</div>
+        <div class="chip-row" id="dispRow">
+          <button class="chip" data-disp="pass">Pass</button>
+          <button class="chip" data-disp="unavailable">Unavailable</button>
+        </div>
+      </div>
+    </div>
+    <div class="flag-line hidden" id="flagLine"></div>
+  </div>
+
+  <h2>Pipeline / booking view</h2>
+  <div class="h2note">scan every talent at once — the amber flag catches “Booked but never Client-approved” at a glance</div>
+  <div class="audit" id="audit"></div>
+  <div class="legend">
+    <span><i class="dotk" style="background:var(--amber)"></i> shortlist · recco · approved</span>
+    <span><i class="dotk" style="background:var(--teal)"></i> booked (pending)</span>
+    <span><i class="dotk" style="background:var(--green)"></i> confirmed (on call sheet)</span>
+    <span><i class="dotk" style="border:1.5px dashed var(--amber);background:rgba(245,166,35,.12)"></i> gap / skipped</span>
+  </div>
+</div>
+
+<script>
+  const MS = [
+    { key:'shortlist', label:'Shortlist',       tier:'amber'   },
+    { key:'recco',     label:'Recco',           tier:'amber'   },
+    { key:'approved',  label:'Client-approved', tier:'amber'   },
+    { key:'booked',    label:'Booked',          tier:'book'    },
+    { key:'confirmed', label:'Confirmed',       tier:'confirm' },
+  ];
+  const STAGE_PILL = {
+    shortlist:['Shortlisted','var(--amber)'], recco:['Recco','var(--amber)'], approved:['Client-approved','var(--amber)'],
+    booked:['Booked · pending','var(--teal)'], confirmed:['Confirmed · on call sheet','var(--green)'], none:['Submitted','var(--subtle)']
+  };
+  const D = ['Jul 2','Jul 3','Jul 5','Jul 6','Jul 6'];
+
+  // detail state — seeded WITH a gap: confirmed set, approved empty
+  let state = { shortlist:true, recco:true, approved:false, booked:true, confirmed:true, rank:'primary', disp:'' };
+
+  function gapsOf(s){ const out=[]; let later=false; for(let i=MS.length-1;i>=0;i--){ if(s[MS[i].key]) later=true; else if(later) out.push(MS[i].key); } return out.reverse(); }
+  function furthest(s){ for(let i=MS.length-1;i>=0;i--) if(s[MS[i].key]) return MS[i].key; return 'none'; }
+
+  function renderDetail(){
+    const g = new Set(gapsOf(state));
+    document.getElementById('strip').innerHTML = MS.map((m,i)=>{
+      const on = state[m.key], gap = g.has(m.key);
+      const cls = ['node', on?'on':'', gap?'gap':'', m.tier==='book'?'tier-book':m.tier==='confirm'?'tier-confirm':''].filter(Boolean).join(' ');
+      const glyph = gap ? '!' : on ? '✓' : '';
+      const time = on ? D[i] : gap ? 'skipped' : '';
+      return `<button class="${cls}" onclick="toggle('${m.key}')"><span class="rail"></span><span class="dot">${glyph}</span><span class="node__label">${m.label}</span><span class="node__time">${time}</span></button>`;
+    }).join('');
+    const f = furthest(state); const [txt,col]=STAGE_PILL[f];
+    const pill = document.getElementById('stagePill');
+    pill.textContent = txt; pill.style.color = col; pill.style.border = '1px solid '+col; pill.style.background='transparent';
+    // rank + disp
+    document.querySelectorAll('#rankSeg button').forEach(b=>b.classList.toggle('on', b.dataset.rank===state.rank));
+    document.querySelectorAll('#rankSeg button').forEach(b=>b.classList.toggle('warn', b.dataset.rank==='backup'&&state.rank==='backup'));
+    document.querySelectorAll('#dispRow button').forEach(b=>b.classList.toggle('on', b.dataset.disp===state.disp));
+    // flag line
+    const fl = document.getElementById('flagLine'); const gaps=gapsOf(state);
+    if(gaps.length){ fl.classList.remove('hidden'); fl.innerHTML = '⚠ &nbsp;'+gaps.map(k=>MS.find(m=>m.key===k).label).join(', ')+' skipped — committed further than the client sign-off'; }
+    else if(state.disp==='unavailable'){ fl.classList.remove('hidden'); fl.style.color='var(--red)'; fl.innerHTML='⚑ &nbsp;Marked unavailable — promote an approved backup for this role'; }
+    else { fl.classList.add('hidden'); fl.style.color='var(--amber)'; }
+  }
+  window.toggle = (k)=>{ state[k]=!state[k]; renderDetail(); };
+  document.getElementById('rankSeg').onclick = e=>{ if(e.target.dataset.rank){ state.rank=e.target.dataset.rank; renderDetail(); } };
+  document.getElementById('dispRow').onclick = e=>{ if(e.target.dataset.disp){ state.disp = state.disp===e.target.dataset.disp?'':e.target.dataset.disp; renderDetail(); } };
+
+  // audit list — realistic cross-section
+  const ROWS = [
+    { name:'Marcus Reyes', role:'LEAD',   ms:['shortlist','recco','approved','booked','confirmed'], rank:'primary' },
+    { name:'Priya Nair',   role:'MOTHER', ms:['shortlist','recco','booked','confirmed'],            rank:'primary' },  // gap: approved skipped
+    { name:'Tom Bäck',     role:'FATHER', ms:['shortlist','recco','approved','confirmed'],          rank:'primary' },  // gap: booked skipped
+    { name:'Dana Okafor',  role:'LEAD',   ms:['shortlist','recco','approved'],                      rank:'backup'  },  // approved backup, ready
+    { name:'Sofia Lin',    role:'KID',    ms:['shortlist','recco'],                                 rank:'primary' },
+    { name:'Ivan Petrov',  role:'FATHER', ms:['shortlist','recco','approved'],                      rank:'primary', disp:'unavailable' },
+    { name:'Cole Adkins',  role:'KID',    ms:['shortlist'],                                         rank:'primary', disp:'pass' },
+  ];
+  function miniGaps(set){ const out=new Set(); let later=false; for(let i=MS.length-1;i>=0;i--){ if(set.has(MS[i].key)) later=true; else if(later) out.add(MS[i].key); } return out; }
+  document.getElementById('audit').innerHTML = ROWS.map(r=>{
+    const set=new Set(r.ms), gaps=miniGaps(set);
+    const mini = MS.map((m,i)=>{
+      const on=set.has(m.key), gap=gaps.has(m.key);
+      const t = m.tier==='book'?'b':m.tier==='confirm'?'c':'';
+      const dot = `<i class="${on?'on '+t:''}${gap?' gap':''}"></i>`;
+      return (i? `<span class="bar ${on?'on':''}"></span>`:'') + dot;
+    }).join('');
+    const badges=[];
+    if(gaps.size) badges.push(`<span class="badge b-gap">⚠ ${[...gaps][0]} skipped</span>`);
+    if(r.disp==='unavailable') badges.push('<span class="badge b-unavail">unavailable</span>');
+    else if(r.rank==='backup') badges.push('<span class="badge b-backup">backup</span>');
+    if(!badges.length){ const f=[...r.ms].pop(); badges.push(`<span class="badge b-stage">${MS.find(m=>m.key===f).label}</span>`); }
+    return `<div class="arow ${r.disp==='pass'?'passed':''}"><div class="aperson"><div class="aperson__name">${r.name}</div><div class="aperson__role">${r.role}</div></div><div class="mini">${mini}</div><div class="aend">${badges.join('')}</div></div>`;
+  }).join('');
+
+  renderDetail();
+</script>
+</body>
+</html>
