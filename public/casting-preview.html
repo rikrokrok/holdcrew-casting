@@ -1032,7 +1032,9 @@
           if (gaps.size) badges.push(`<span class="bk-badge b-gap">⚠ ${MS_META.find(m => m.key === [...gaps][0]).short} skipped</span>`);
           if (p.disposition === 'unavailable') badges.push('<span class="bk-badge b-unavail">Unavailable</span>');
           else if (p.disposition === 'pass') badges.push('<span class="bk-badge b-pass">Pass</span>');
-          else if (p.rank === 'backup') badges.push('<span class="bk-badge b-backup">Backup</span>');
+          // status already reads "Backup" for a non-committed backup; only tag the
+          // ones a commitment (Booked/Confirmed) would otherwise hide.
+          else if (p.rank === 'backup' && c.assignments[r.id] !== 'backup') badges.push('<span class="bk-badge b-backup">Backup</span>');
           badges.push(statusBadge(c.assignments[r.id]));
           return `<div class="bk-row ${p.disposition==='pass'?'passed':''}" onclick="openDrawer('${c.id}')">
             <img class="bk-thumb" src="${esc(photoUrl(c))}" alt="" loading="lazy">

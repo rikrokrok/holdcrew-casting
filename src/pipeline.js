@@ -49,14 +49,19 @@ const levelOf = (a) =>
 // Derive the transitional board status from the axes (inverse of LEGACY). Only a
 // 'pass' disposition short-circuits (matches the old terminal Pass bucket);
 // 'unavailable' falls through to the progress level so a booked-but-unavailable
-// talent still reads as booked (the flag surfaces in the step-2 audit UI). Pure.
+// talent still reads as booked (the flag surfaces in the step-2 audit UI).
+// Backup is treated as a standing that SUPERSEDES the pre-commitment tiers: once a
+// contender on the selects board is marked a backup they read as "Backup" (so the
+// tap is visible on the board — Eric 2026-07-10), while their progress ticks stay
+// recorded on the strip. A booked/confirmed backup still shows the commitment. Pure.
 function deriveStatus(a) {
   if (a.disposition === 'pass') return 'pass';
   if (a.ms_confirmed) return 'booked';
   if (a.ms_booked)    return 'hold';
+  if (a.rank === 'backup' && (a.ms_shortlist || a.ms_recco || a.ms_approved)) return 'backup';
   if (a.ms_approved)  return 'select';
   if (a.ms_recco)     return 'recommend';
-  if (a.ms_shortlist) return a.rank === 'backup' ? 'backup' : 'shortlist';
+  if (a.ms_shortlist) return 'shortlist';
   return 'submitted';
 }
 
