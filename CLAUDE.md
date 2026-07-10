@@ -77,20 +77,24 @@ Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, 
   an exact copy of live data (incl. WAL); the Job Log seam is stubbed in tests — never written from tests.
   The **renames** (Hold→Booked, Book→Confirmed) are done in the DATA MODEL (a Booked tick = pending Job Log,
   Confirmed = Confirmed); the button *labels* + the timestamped progress strip land in step 2's UI.
-- **Step 2 (audit UI) — PREVIEW BUILT 2026-07-09, pending Eric sign-off + cutover.** Mock approved ("i
-  like it a lot") → `public/pipeline-mock.html`. Real wired build = **`public/casting-preview.html`**
-  (served ungated for review; **live `casting.html` untouched**). Drawer "Consider for" = a five-node
+- **Step 2 (audit UI) — LIVE (cut over 2026-07-10).** The real board `public/casting.html` now carries it
+  (preview file retired; mock kept at `public/pipeline-mock.html`). Drawer "Consider for" = a five-node
   timestamped **progress strip** per assigned role (tap to tick) + Primary/Backup segmented + Pass/Unavail
-  chips + amber gap-flag line; new **Booking tab** = whole pipeline at a glance (mini-strip + badge per
-  talent, banner counts gaps). Wired to `PUT /assignments/{milestone,rank,disposition}`; old status
-  dropdown + Hold/Book buttons removed. Renamed labels (Hold→Booked, Book→Confirmed, Select→Approved,
-  Recommend→Recco). Deep-links `?tab=` / `?open=`. Defines `--teal` (casting.css only had literal #5bbfb5
-  → `var(--teal)` was invalid, Booked nodes rendered empty — fixed). Verified by rendering the real UI
-  against seeded pipeline data (gaps/backup/unavailable/pass) via a local stub. **Preview URL:
-  `https://upshot.casting.holdcrew.com/casting-preview.html?job=PWS` (login → real data; changes save).
-  CUTOVER when signed off: `cp public/casting-preview.html public/casting.html` (carries the `--teal` +
-  everything), then delete the preview.**
-- **Step 3:** presentation pages (curated, named, multi-instance; take-pick + backup show/hide) = task 7.
+  chips + amber gap-flag line. **Booking tab** = whole pipeline at a glance (mini-strip + badge per talent,
+  banner counts gaps). **Selects tab** groups backups under a per-role "Backups" sub-bench. **Combo review**
+  window: every slot swaps in place (tap → photo picker, empty roles show too). Wired to `PUT /assignments/
+  {milestone,rank,disposition}`; old status dropdown + Hold/Book buttons gone. Labels renamed (Hold→Booked,
+  Book→Confirmed, Select→Approved, Recommend→Recco). Deep-links `?tab=` / `?open=` / `?review=`. `--teal`
+  token defined in-page (casting.css only had literal #5bbfb5). **Backup is a status when tapped**: `deriveStatus`
+  returns 'backup' for a rank=backup contender on the selects board (supersedes shortlist/recco/approved so
+  the tap is visible; Booked/Confirmed still wins), progress ticks preserved — flow is select-FIRST then
+  relegate to backup (Eric 2026-07-10).
+- **Step 3 (presentation pages, task 7) — BUILDING (started 2026-07-10).** The curated client lookbook the
+  "Present to client →" buttons (roleSection + combo review, currently `presentRole`/`presentCombo` stubs)
+  are waiting on: a first-class named, multi-instance page object (create → name → assign individuals and/or
+  combos), per-page take pick + backup show/hide + order, a passive tokenized viewer; client reviews off-
+  platform and the PM records approval back on the pipeline (Client-approved tick). Data: `casting_pages` +
+  `casting_page_items` (see PLAN.md §"Data-model deltas").
 - Also: `CASTING_DATA_DIR` env now overrides the SQLite dir (used to migrate/verify against a DB copy).
 **NOT DONE (other):** CSV import UI polish, job.html tile (task 9, decoupled), drawer single-role
 simplification, transcode-to-spec decision.

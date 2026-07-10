@@ -152,11 +152,14 @@ router.get('/board', (req, res) => {
     (pipeByCand[a.candidate_id] ||= {})[a.role_id] = pipeline.shape(a);
   }
   const combos = db.prepare('SELECT * FROM casting_combos WHERE project_id = ? ORDER BY ord, created_at').all(p.id);
+  const pages = db.prepare('SELECT id, name, token, ord FROM casting_pages WHERE project_id = ? ORDER BY ord, created_at').all(p.id)
+    .map((pg) => ({ ...pg, items: db.prepare('SELECT COUNT(*) AS n FROM casting_page_items WHERE page_id = ?').get(pg.id).n }));
   res.json({
     project: { id: p.id, job: p.job, title: p.title },
     roles,
     candidates: cands.map((c) => ({ ...toCand(c), assignments: byCand[c.id] || {}, pipeline: pipeByCand[c.id] || {}, tapes: tapesFor(c.id) })),
     combos: combos.map(toCombo),
+    pages,
   });
 });
 

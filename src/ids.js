@@ -20,6 +20,8 @@ module.exports = {
   mediaId:      () => 'm_' + rand(10),
   comboId:      () => 'cb_' + rand(9),
   comboSlotId:  () => 'cs_' + rand(9),
+  pageId:       () => 'pg_' + rand(9),
+  pageItemId:   () => 'pi_' + rand(9),
   shareToken:   () => rand(22),
   rand,
 };

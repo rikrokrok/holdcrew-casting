@@ -226,6 +226,46 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_comboslots_combo ON casting_combo_slots(combo_id);
 `);
 
+// Client presentation pages (spec §"Client presentation = curated pages"). A page
+// is a first-class, named, multi-instance object (create → name → assign): the PM
+// curates which reccos/combos the client sees, which take plays, and whether each
+// role's backups are shown. Each page has its own unguessable token = a passive,
+// tokenized lookbook (reels 'sends' lineage, promoted to a named object). The client
+// only reviews; approvals come back off-platform and the PM records them on the pipeline.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS casting_pages (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES casting_projects(id) ON DELETE CASCADE,
+    tenant      TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    token       TEXT NOT NULL UNIQUE,           -- public /present/<token> link
+    intro       TEXT,                            -- optional note shown atop the lookbook
+    ord         INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_pages_project ON casting_pages(project_id);
+  CREATE INDEX IF NOT EXISTS idx_pages_token   ON casting_pages(token);
+
+  -- Items on a page, in order. kind='individual' → ref_id = candidate_id shown for
+  -- role_id (the client's options for one role); kind='combo' → ref_id = combo_id
+  -- (an assembled cast presented as one block). take_id = which tape plays (NULL =
+  -- latest); show_backup = also include that role's backups.
+  CREATE TABLE IF NOT EXISTS casting_page_items (
+    id          TEXT PRIMARY KEY,
+    page_id     TEXT NOT NULL REFERENCES casting_pages(id) ON DELETE CASCADE,
+    tenant      TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'individual',   -- individual | combo
+    ref_id      TEXT NOT NULL,                        -- candidate_id | combo_id
+    role_id     TEXT,                                 -- individual: which role
+    take_id     TEXT,                                 -- chosen casting_media tape (NULL = latest)
+    show_backup INTEGER NOT NULL DEFAULT 0,
+    ord         INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_pageitems_page ON casting_page_items(page_id);
+`);
+
 // Migrate the legacy single tape_key -> a casting_media 'Take 1' row. Idempotent
 // (skips a candidate whose tape_key is already represented).
 {

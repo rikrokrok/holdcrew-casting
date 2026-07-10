@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Casting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0c; --surface:#131315; --surface-raised:#1b1b1e; --border:#2a2a2e; --border-inner:#212125;
+    --amber:#f5a623; --amber-dim:#c47f00; --teal:#5bbfb5; --text:#ececec; --subtle:#9a9a9a; --muted:#5f5f66; --dim:#333;
+    --fd:'Bebas Neue',Impact,sans-serif; --fm:'DM Mono',Consolas,monospace; --fb:'DM Sans',Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--fb);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 90px}
+  .mast{padding:46px 0 26px;border-bottom:1px solid var(--border);margin-bottom:34px}
+  .mast__kicker{font-family:var(--fm);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--amber);margin-bottom:12px}
+  .mast__title{font-family:var(--fd);font-size:clamp(40px,8vw,72px);letter-spacing:.02em;line-height:.95;font-weight:400;margin:0}
+  .mast__intro{font-size:15px;color:var(--subtle);line-height:1.6;margin-top:16px;max-width:60ch}
+
+  .rolegroup{margin-bottom:40px}
+  .rolegroup__head{display:flex;align-items:baseline;gap:12px;margin:0 0 16px}
+  .rolegroup__name{font-family:var(--fd);font-size:26px;letter-spacing:.05em;color:var(--amber)}
+  .rolegroup__char{font-size:13px;font-style:italic;color:var(--subtle)}
+  .subrole{font-family:var(--fm);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber-dim);margin:22px 0 12px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+  .actor{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .actor__media{position:relative;width:100%;aspect-ratio:3/4;background:var(--surface-raised)}
+  .actor__media img,.actor__media video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+  .actor__media video{object-fit:contain}
+  .actor__play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;cursor:pointer;background:linear-gradient(transparent 55%,rgba(0,0,0,.55))}
+  .actor__play span{width:52px;height:52px;border-radius:50%;background:rgba(245,166,35,.94);color:#000;display:flex;align-items:center;justify-content:center;font-size:18px;padding-left:4px;box-shadow:0 6px 22px rgba(0,0,0,.5)}
+  .actor__notape{position:absolute;left:0;right:0;bottom:0;font-family:var(--fm);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:rgba(0,0,0,.55);padding:5px;text-align:center}
+  .actor__body{padding:11px 13px 13px}
+  .actor__name{font-size:16px;font-weight:600;line-height:1.15}
+  .actor__tag{font-family:var(--fm);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-dim);border:1px solid var(--amber-dim);border-radius:20px;padding:2px 8px;margin-top:7px;display:inline-block}
+
+  .combo{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:20px 20px 22px;margin-bottom:24px}
+  .combo__head{display:flex;align-items:baseline;gap:10px;margin-bottom:16px}
+  .combo__grp{font-family:var(--fm);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber-dim)}
+  .combo__name{font-family:var(--fd);font-size:28px;letter-spacing:.04em}
+  .combo .grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:13px}
+  .combo .actor{background:var(--surface-raised);border-color:var(--border-inner)}
+  .combo .actor__role{font-family:var(--fm);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-bottom:3px}
+
+  .state{max-width:520px;margin:16vh auto;text-align:center;padding:0 24px}
+  .state__t{font-family:var(--fd);font-size:40px;letter-spacing:.03em;color:var(--text)}
+  .state__s{font-family:var(--fm);font-size:12.5px;color:var(--subtle);margin-top:10px;line-height:1.6}
+  .foot{margin-top:50px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--fm);font-size:10px;letter-spacing:.04em;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div id="app"><div class="state"><div class="state__s">Loading…</div></div></div>
+<script>
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const TOKEN = location.pathname.split('/').filter(Boolean).pop();
+  const media = key => key ? `/present/${TOKEN}/media?key=${encodeURIComponent(key)}` : '';
+  const dice = name => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent((name||'').trim())}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+
+  function actorCard(a, opts = {}) {
+    const photo = a.headshotKey ? media(a.headshotKey) : dice(a.name);
+    const roleLine = opts.role ? `<div class="actor__role">${esc(opts.role)}</div>` : '';
+    const tag = opts.tag ? `<div class="actor__tag">${esc(opts.tag)}</div>` : '';
+    let mediaBox;
+    if (a.take && a.take.key) {
+      mediaBox = `<video preload="none" playsinline poster="${esc(photo)}"><source src="${esc(media(a.take.key))}"></video>
+        <div class="actor__play" onclick="playTape(this)"><span>▶</span></div>`;
+    } else {
+      mediaBox = `<img src="${esc(photo)}" alt="${esc(a.name)}" loading="lazy"><div class="actor__notape">No tape</div>`;
+    }
+    return `<div class="actor"><div class="actor__media">${mediaBox}</div>
+      <div class="actor__body">${roleLine}<div class="actor__name">${esc(a.name)}</div>${tag}</div></div>`;
+  }
+  function playTape(overlay){ const v = overlay.previousElementSibling; overlay.remove(); v.setAttribute('controls',''); v.play(); }
+
+  function render(data){
+    const app = document.getElementById('app');
+    const items = data.items || [];
+    if (!items.length){ app.innerHTML = `<div class="state"><div class="state__t">${esc(data.page.name||'Casting')}</div><div class="state__s">This selection is being prepared — check back shortly.</div></div>`; return; }
+    let html = `<div class="wrap"><div class="mast"><div class="mast__kicker">Casting · for your review</div><h1 class="mast__title">${esc(data.page.name||'Casting')}</h1>${data.page.intro?`<div class="mast__intro">${esc(data.page.intro)}</div>`:''}</div>`;
+    // group consecutive individuals by role; combos are standalone blocks
+    let i = 0;
+    while (i < items.length){
+      const it = items[i];
+      if (it.kind === 'combo'){
+        html += `<div class="combo"><div class="combo__head">${it.grp?`<span class="combo__grp">${esc(it.grp)}</span>`:''}<span class="combo__name">${esc(it.name)}</span></div><div class="grid">`
+          + it.roles.map(r => actorCard(r.actor, { role: r.role ? (r.role.character || r.role.name) : '' })).join('') + `</div></div>`;
+        i++; continue;
+      }
+      // gather a run of individuals sharing the same role
+      const roleKey = it.role ? it.role.name : '';
+      const run = [];
+      while (i < items.length && items[i].kind === 'individual' && ((items[i].role?items[i].role.name:'') === roleKey)){ run.push(items[i]); i++; }
+      const primaries = run.filter(x => !x.backup), backups = run.filter(x => x.backup);
+      const roleHead = it.role ? `<div class="rolegroup__head"><span class="rolegroup__name">${esc(it.role.name)}</span>${it.role.character?`<span class="rolegroup__char">${esc(it.role.character)}</span>`:''}</div>` : '';
+      html += `<div class="rolegroup">${roleHead}<div class="grid">${primaries.map(x=>actorCard(x.actor)).join('')}</div>`
+        + (backups.length ? `<div class="subrole">Also considering</div><div class="grid">${backups.map(x=>actorCard(x.actor,{tag:'Backup'})).join('')}</div>` : '')
+        + `</div>`;
+    }
+    html += `<div class="foot">Presented via HoldCrew Casting</div></div>`;
+    app.innerHTML = html;
+  }
+
+  fetch(`/present/${TOKEN}/data`, { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(() => {
+      document.getElementById('app').innerHTML = `<div class="state"><div class="state__t">Not found</div><div class="state__s">This casting link is invalid or has been withdrawn. Ask your producer for a fresh link.</div></div>`;
+    });
+</script>
+</body>
+</html>

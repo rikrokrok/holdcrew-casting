@@ -3,11 +3,13 @@
 // Auth (task 2), the casting data-layer routers (task 3), media/Wasabi (task 6),
 // and the client-presentation token routes (task 7) mount here as they land.
 const express = require('express');
+const path = require('path');
 const cfg = require('./config');
 const db = require('./db'); // ensure schema at boot
 const tenant = require('./tenant');
 const auth = require('./auth');
 const castingRouter = require('./casting');
+const pages = require('./pages');
 
 const app = express();
 app.disable('x-powered-by');
@@ -35,6 +37,13 @@ app.use(auth.router);
 
 // ── Casting data API (producer-side; gated per tenant) ───────────────────────
 app.use('/api/casting', auth.requireAuth, castingRouter);
+app.use('/api/casting', auth.requireAuth, pages.producer);   // presentation-page CRUD
+
+// ── Client presentation (public, token-only — no login) ──────────────────────
+// /present/<token>/{data,media} = the lookbook JSON + token-scoped media presign;
+// /present/<token> = the passive viewer page. The token is the only credential.
+app.use('/present', pages.public);
+app.get('/present/:token', (_req, res) => res.sendFile(path.join(cfg.PUBLIC_DIR, 'present.html')));
 
 // ── Gated board page (the producer-side builder) ─────────────────────────────
 // Registered before static so /casting(.html) can't be served ungated.
