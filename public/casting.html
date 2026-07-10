@@ -7,6 +7,8 @@
   <title>Casting — HoldCrew</title>
   <link rel="stylesheet" href="/css/casting.css">
   <style>
+    /* casting.css uses the literal #5bbfb5 (Booked/teal) but defines no token — add it. */
+    :root { --teal: #5bbfb5; }
     .job-header__back { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); text-decoration: none; flex-shrink: 0; }
     .job-header__back:hover { color: var(--amber); }
     .job-header__name { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.04em; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -99,6 +101,9 @@
     .sel-sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .sel-status { flex-shrink: 0; }
     .role-empty { padding: 14px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    /* backups sub-bench within a role (Selects tab) */
+    .role-subhead { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--surface-mid); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-inner); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
+    .role-subhead__n { color: var(--muted); }
 
     /* ── detail drawer (shared by both tabs) ── */
     .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem 1rem; overflow-y: auto; }
@@ -174,6 +179,78 @@
     .cast-toast.show { opacity: 1; transform: translate(-50%, 0); }
     .cast-toast.warn { background: var(--red); color: #fff; }
 
+    /* ── pipeline: progress strip + rank/disposition axes (drawer) ── */
+    .pblock { padding: 6px 0 14px; border-bottom: 1px solid var(--border-inner); }
+    .pblock:last-child { border-bottom: none; padding-bottom: 0; }
+    .pblock__head { margin-bottom: 14px; }
+    .pstrip { display: flex; align-items: flex-start; }
+    .pnode { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; background: none; border: none; cursor: pointer; padding: 0; color: inherit; font-family: inherit; }
+    .pnode .prail { position: absolute; top: 14px; left: -50%; width: 100%; height: 2px; background: var(--dim); z-index: 0; }
+    .pnode:first-child .prail { display: none; }
+    .pdot { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; border: 2px solid var(--dim); background: var(--surface); font-size: 14px; color: var(--muted); transition: all 0.14s ease; }
+    .pnode.on .prail { background: var(--amber-dim); }
+    .pnode.on .pdot { border-color: var(--amber); background: var(--amber); color: #000; }
+    .pnode.on.t-book .pdot { border-color: var(--teal); background: var(--teal); }
+    .pnode.on.t-book .prail { background: var(--teal); }
+    .pnode.on.t-confirm .pdot { border-color: var(--green); background: var(--green); }
+    .pnode.on.t-confirm .prail { background: var(--green); }
+    .pnode.gap .pdot { border-style: dashed; border-color: var(--amber); color: var(--amber); background: rgba(245,166,35,0.08); }
+    .pnode:hover .pdot { border-color: var(--subtle); }
+    .pnode.on:hover .pdot, .pnode.gap:hover .pdot { filter: brightness(1.1); }
+    .plabel { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--subtle); margin-top: 8px; text-align: center; line-height: 1.25; }
+    .pnode.on .plabel { color: var(--text); }
+    .pnode.gap .plabel { color: var(--amber); }
+    .ptime { font-family: var(--font-mono); font-size: 8px; color: var(--muted); margin-top: 2px; height: 10px; }
+    .pnode.gap .ptime { color: var(--amber-dim); }
+    .paxes { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-top: 18px; }
+    .pseg, .pchips { display: inline-flex; gap: 6px; }
+    .pseg { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; gap: 0; }
+    .pseg button { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; background: none; border: none; color: var(--subtle); padding: 6px 12px; cursor: pointer; }
+    .pseg button + button { border-left: 1px solid var(--border); }
+    .pseg button.on { background: var(--surface-raised); color: var(--text); }
+    .pchip { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; background: none; border: 1px solid var(--border); border-radius: 20px; color: var(--subtle); padding: 6px 12px; cursor: pointer; }
+    .pchip.on { border-color: var(--red); color: var(--red); background: rgba(224,92,92,0.08); }
+    .pflag { margin-top: 14px; font-family: var(--font-mono); font-size: 10.5px; color: var(--amber); line-height: 1.5; }
+    .pflag--red { color: var(--red); }
+    .add-roles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .add-role-chip { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--subtle); background: none; border: 1px dashed var(--border); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+    .add-role-chip:hover { color: var(--amber); border-color: var(--amber); }
+
+    /* ── booking / pipeline audit view ── */
+    .bk-banner { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; }
+    .bk-banner.ok { color: var(--green); border: 1px solid rgba(62,207,112,0.3); background: rgba(62,207,112,0.05); }
+    .bk-banner.warn { color: var(--amber); border: 1px solid var(--amber-dim); background: rgba(245,166,35,0.06); }
+    .bk-sec { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); margin-bottom: 12px; overflow: hidden; }
+    .bk-sec__head { display: flex; align-items: baseline; gap: 8px; padding: 10px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border); }
+    .bk-sec__name { font-family: var(--font-display); font-size: 17px; letter-spacing: 0.05em; color: var(--amber); }
+    .bk-sec__char { font-family: var(--font-body); font-size: 11.5px; font-style: italic; color: var(--subtle); }
+    .bk-row { display: grid; grid-template-columns: 40px 1fr auto auto; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border-inner); cursor: pointer; }
+    .bk-row:last-child { border-bottom: none; }
+    .bk-row:hover { background: var(--surface-mid); }
+    .bk-row.passed { opacity: 0.45; }
+    .bk-thumb { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--surface-raised); }
+    .bk-who { min-width: 0; }
+    .bk-name { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bk-role { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); margin-top: 2px; }
+    .bk-mini { display: flex; align-items: center; }
+    .bk-mini i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); background: var(--surface); display: block; box-sizing: border-box; }
+    .bk-mini .mbar { width: 10px; height: 1.5px; background: var(--dim); }
+    .bk-mini i.on { border-color: var(--amber); background: var(--amber); }
+    .bk-mini i.on.b { border-color: var(--teal); background: var(--teal); }
+    .bk-mini i.on.c { border-color: var(--green); background: var(--green); }
+    .bk-mini .mbar.on { background: var(--amber-dim); }
+    .bk-mini i.gap { border-style: dashed; border-color: var(--amber); background: rgba(245,166,35,0.12); }
+    .bk-end { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+    .bk-badge { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+    .b-gap { color: var(--amber); border: 1px solid var(--amber-dim); background: rgba(245,166,35,0.06); }
+    .b-backup { color: var(--teal); border: 1px solid var(--teal); }
+    .b-unavail { color: var(--red); border: 1px solid var(--red); }
+    .b-pass { color: var(--red); border: 1px solid rgba(224,92,92,0.3); }
+    @media (max-width: 600px) {
+      .bk-row { grid-template-columns: 34px 1fr; row-gap: 8px; }
+      .bk-mini, .bk-end { grid-column: 2; justify-content: flex-start; }
+    }
+
     /* ── combinations (selects tab) ── */
     .combos-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 1.7rem 0 0.9rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
     .combos-bar__label { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.05em; color: var(--text); }
@@ -232,6 +309,12 @@
     .cr-close:hover { color: var(--text); }
     .cr-body { padding: 12px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
     .cr-slot { display: flex; gap: 12px; align-items: center; }
+    .cr-slot--pick { cursor: pointer; border: 1px solid transparent; border-radius: var(--radius); padding: 6px; }
+    .cr-slot--pick:hover { border-color: var(--border); background: var(--surface-mid); }
+    .cr-photo--empty { display: block; border: 1px dashed var(--dim); box-sizing: border-box; }
+    .cr-name--empty { color: var(--muted); font-style: italic; }
+    /* the slot picker opens OVER the review window, so lift it above (both are .modal-back z 200) */
+    #cp-back { z-index: 260; }
     .cr-photo { width: 56px; height: 70px; object-fit: cover; border-radius: 6px; background: var(--surface-raised); flex-shrink: 0; }
     .cr-info { min-width: 0; flex: 1; }
     .cr-role { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); }
@@ -367,20 +450,21 @@
     const JOB = (params.get('job') || '').trim();
     document.getElementById('job-name').textContent = JOB || 'Casting';
 
-    // v1 production lifecycle (creative ladder). Availability/first-refusal is a
-    // Casting-Director concern, deliberately out of scope here. order = best-first.
+    // Derived "furthest stage" labels — the pipeline model (three axes) lives on
+    // the server (src/pipeline.js); status is derived from the milestones. Labels
+    // carry the rename: hold=Booked (pending), booked=Confirmed (on call sheet),
+    // select=Client-approved tier, recommend=Recco.
     const STATUS = {
-      booked:    { label: 'Booked',    order: 0 },
-      hold:      { label: 'Hold',      order: 1 },
-      select:    { label: 'Select',    order: 2 },
-      recommend: { label: 'Recommend', order: 3 },
+      booked:    { label: 'Confirmed', order: 0 },
+      hold:      { label: 'Booked',    order: 1 },
+      select:    { label: 'Approved',  order: 2 },
+      recommend: { label: 'Recco',     order: 3 },
       backup:    { label: 'Backup',    order: 4 },
       callback:  { label: 'Callback',  order: 5 },
       shortlist: { label: 'Shortlist', order: 6 },
       submitted: { label: 'Submitted', order: 7 },
       pass:      { label: 'Pass',      order: 8 },
     };
-    const STATUS_KEYS = ['submitted','shortlist','callback','recommend','backup','select','hold','booked','pass'];
     // 'submitted' = assigned to a role but not yet shortlisted; lives in General
     // Call only. Everything shortlisted+ (incl. Pass, as a decision record) shows
     // on the Selects board.
@@ -437,24 +521,29 @@
         cands = board.candidates || [];
         combos = board.combos || [];
         render();
+        const openId = params.get('open'); if (openId && byId(openId)) openDrawer(openId); // deep-link a drawer
+        const revId = params.get('review'); if (revId && comboById(revId)) openComboReview(revId); // deep-link a combo review
       } catch (e) {
         if (e.message === 'auth') return;
         el.innerHTML = `<div class="load-err">Couldn't load casting. <a href="#" onclick="loadBoard();return false;">Retry</a></div>`;
       }
     }
 
-    let activeTab = 'general';
+    let activeTab = ['general', 'selects', 'booking'].includes(params.get('tab')) ? params.get('tab') : 'general';
     function setTab(t) { activeTab = t; render(); }
 
     function render() {
       const el = document.getElementById('cast-body');
       const assignedCount = cands.reduce((n, c) => n + (Object.values(c.assignments || {}).some(onSelects) ? 1 : 0), 0);
+      const bookingCount = cands.reduce((n, c) => n + Object.values(c.assignments || {}).filter(onSelects).length, 0);
+      const body = activeTab === 'general' ? generalView() : activeTab === 'booking' ? bookingView() : selectsView();
       el.innerHTML = `
         <div class="tabs">
           <button class="tab ${activeTab==='general'?'on':''}" onclick="setTab('general')">General Call<span class="tab__n">${cands.length}</span></button>
           <button class="tab ${activeTab==='selects'?'on':''}" onclick="setTab('selects')">Selects<span class="tab__n">${assignedCount}</span></button>
+          <button class="tab ${activeTab==='booking'?'on':''}" onclick="setTab('booking')">Booking<span class="tab__n">${bookingCount}</span></button>
         </div>
-        <div id="tab-body">${activeTab === 'general' ? generalView() : selectsView()}</div>`;
+        <div id="tab-body">${body}</div>`;
     }
 
     // ── GENERAL CALL ──
@@ -637,7 +726,9 @@
     let pickerCtx = null;
     function openSlotPicker(cbId, roleId) {
       const cb = comboById(cbId), r = roleById(roleId); if (!cb || !r) return;
-      pickerCtx = { cbId, roleId };
+      // Remember if we opened over the review window, so we can return to it refreshed.
+      const reviewOpen = !document.getElementById('combo-review-back').classList.contains('hidden');
+      pickerCtx = { cbId, roleId, reviewOpen };
       const curId = cb.slots[roleId] || '';
       const pool = cands.filter(c => c.assignments && roleId in c.assignments && onSelects(c.assignments[roleId]));
       const tiles = pool.map(c => `
@@ -665,10 +756,11 @@
     }
     async function chooseSlot(candId) {
       if (!pickerCtx) return;
-      const { cbId, roleId } = pickerCtx;
+      const { cbId, roleId, reviewOpen } = pickerCtx;
       document.getElementById('cp-back').classList.add('hidden');
       pickerCtx = null;
       await setSlot(cbId, roleId, candId);
+      if (reviewOpen) openComboReview(cbId);   // return to the review with the new pick shown
     }
     function presentCombo(id) {
       const cb = comboById(id);
@@ -687,25 +779,35 @@
       document.getElementById('combo-review-back').classList.add('hidden');
     }
     function comboReviewHtml(cb) {
-      const filled = roles.filter(r => cb.slots[r.id]).map(r => ({ r, c: byId(cb.slots[r.id]) })).filter(x => x.c);
-      const cast = filled.length ? filled.map(({ r, c }) => {
+      // Every role is a swappable slot right here — tap to change (or fill/clear)
+      // the pick without leaving the review. Empty roles show too, so a combo can
+      // be assembled entirely from this window.
+      const roleLabel = r => `${esc(r.name)}${r.character ? ` · <span class="cr-char">${esc(r.character)}</span>` : ''}`;
+      const cast = roles.length ? roles.map(r => {
+        const c = cb.slots[r.id] ? byId(cb.slots[r.id]) : null;
+        if (!c) {
+          return `<div class="cr-slot cr-slot--pick cr-slot--empty" onclick="openSlotPicker('${cb.id}','${r.id}')" title="Pick ${esc(r.name)}">
+            <span class="cr-photo cr-photo--empty"></span>
+            <div class="cr-info"><div class="cr-role">${roleLabel(r)}</div><div class="cr-name cr-name--empty">Pick an actor…</div></div>
+          </div>`;
+        }
         const nt = (c.tapes || []).length;
-        const tape = nt ? `<button class="cr-tape" onclick="openVideo('${c.id}')">▶ ${nt > 1 ? nt + ' tapes' : 'Tape'}</button>` : '';
+        const tape = nt ? `<button class="cr-tape" onclick="event.stopPropagation();openVideo('${c.id}')">▶ ${nt > 1 ? nt + ' tapes' : 'Tape'}</button>` : '';
         const st = (c.assignments || {})[r.id];
-        return `<div class="cr-slot">
+        return `<div class="cr-slot cr-slot--pick" onclick="openSlotPicker('${cb.id}','${r.id}')" title="Tap to swap ${esc(r.name)}">
           <img class="cr-photo" src="${esc(photoUrl(c))}" alt="${esc(c.name)}">
           <div class="cr-info">
-            <div class="cr-role">${esc(r.name)}${r.character ? ` · <span class="cr-char">${esc(r.character)}</span>` : ''}</div>
+            <div class="cr-role">${roleLabel(r)}</div>
             <div class="cr-name">${esc(c.name)}</div>
             <div class="cr-meta">${esc(c.agency || '')} ${tape} ${st ? statusBadge(st) : ''}</div>
           </div>
         </div>`;
-      }).join('') : `<div class="cr-empty">No actors picked yet — fill this combo's role slots first (tap a slot on the card).</div>`;
-      const n = filled.length;
+      }).join('') : `<div class="cr-empty">No roles yet — add roles on the Selects tab first.</div>`;
+      const n = roles.filter(r => cb.slots[r.id]).length;
       const actions = n ? `
         <button class="cr-act cr-act--rec" onclick="comboAction('${cb.id}','recommend')">Recommend</button>
-        <button class="cr-act cr-act--hold" onclick="comboAction('${cb.id}','hold')">Put on hold</button>
-        <button class="cr-act cr-act--book" onclick="comboAction('${cb.id}','book')">Book</button>
+        <button class="cr-act cr-act--hold" onclick="comboAction('${cb.id}','hold')">Book</button>
+        <button class="cr-act cr-act--book" onclick="comboAction('${cb.id}','book')">Confirm</button>
         <button class="cr-act cr-act--present" onclick="presentCombo('${cb.id}')">Present ▷</button>` : '';
       return `
         <div class="cr-head">
@@ -714,13 +816,13 @@
         </div>
         <div class="cr-body">${cast}</div>
         <div class="cr-actions">${actions}</div>
-        ${n ? `<div class="cr-note">Applies to all ${n} in this combo. Hold / Book write to the HoldCrew Job Log; Recommend is internal.</div>` : ''}`;
+        ${n ? `<div class="cr-note">Applies to all ${n} in this combo. Book / Confirm write to the HoldCrew Job Log (Confirm → call sheet); Recommend is internal.</div>` : ''}`;
     }
     async function comboAction(comboId, action) {
       const cb = comboById(comboId); if (!cb) return;
       const filled = roles.filter(r => cb.slots[r.id]).map(r => ({ roleId: r.id, candId: cb.slots[r.id] }));
       if (!filled.length) return;
-      const verb = { recommend: 'Recommend', hold: 'Put on hold', book: 'Book' }[action];
+      const verb = { recommend: 'Recommend', hold: 'Book', book: 'Confirm' }[action];
       const writes = action !== 'recommend';
       if (!confirm(`${verb} all ${filled.length} in "${cb.name}"?${writes ? '\n\nThis writes them to the HoldCrew Job Log.' : ''}`)) return;
       let ok = 0, warn = 0;
@@ -742,21 +844,27 @@
     }
     function roleSection(r) {
       // Selects board = shortlisted+ (candidates still at 'submitted' stay in the
-      // General Call until they're shortlisted).
-      const members = cands
-        .filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]))
-        .sort((a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name));
+      // General Call until they're shortlisted). Backups (rank=backup) are relegated
+      // selects, so split them onto a sub-bench below the primary contenders.
+      const byStatus = (a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name);
+      const all = cands.filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]));
+      const isBackup = c => pipeFor(c, r.id).rank === 'backup';
+      const primaries = all.filter(c => !isBackup(c)).sort(byStatus);
+      const backups = all.filter(isBackup).sort(byStatus);
       const collapsed = collapsedRoles.has(r.id);
-      const nSel = members.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
-      const rows = members.length
-        ? members.map(c => selRow(c, r.id)).join('')
+      const nSel = all.filter(c => ['select','booked'].includes(c.assignments[r.id])).length;
+      const rows = all.length
+        ? (primaries.map(c => selRow(c, r.id)).join('')
+           + (backups.length
+              ? `<div class="role-subhead">Backups <span class="role-subhead__n">${backups.length}</span></div>` + backups.map(c => selRow(c, r.id)).join('')
+              : ''))
         : `<div class="role-empty">No one shortlisted yet — shortlist actors from the General Call.</div>`;
       return `<div class="role-sec ${collapsed?'collapsed':''}">
         <div class="role-head" onclick="toggleRole('${r.id}')">
           <span class="role-head__chev">▾</span>
           <span class="role-head__name">${esc(r.name)}</span>
           <span class="role-head__char">${esc(r.character || '')}</span>
-          <span class="role-head__count">${members.length} in contention${nSel?` · ${nSel} select`:''}</span>
+          <span class="role-head__count">${all.length} in contention${nSel?` · ${nSel} select`:''}${backups.length?` · ${backups.length} backup`:''}</span>
           ${nSel ? `<a class="role-present" onclick="event.stopPropagation();presentRole('${r.id}')">Present to client →</a>` : ''}
         </div>
         <div class="role-body">${rows}</div>
@@ -798,6 +906,159 @@
       alert(`Client presentation for "${r ? r.name : ''}" — the passive photo + name + tape review page — is the next slice to build (task 7).`);
     }
 
+    // ── pipeline: three axes per (candidate × role) — see src/pipeline.js ──
+    // progress (five timestamped, independently-tickable milestones), rank, disposition.
+    const MS_META = [
+      { key: 'shortlist', short: 'Shortlist', label: 'Shortlist',       tier: '' },
+      { key: 'recco',     short: 'Recco',     label: 'Recco',           tier: '' },
+      { key: 'approved',  short: 'Client',    label: 'Client-approved', tier: '' },
+      { key: 'booked',    short: 'Booked',    label: 'Booked',          tier: 't-book' },
+      { key: 'confirmed', short: 'Confirmed', label: 'Confirmed',       tier: 't-confirm' },
+    ];
+    const MS_KEYS = MS_META.map(m => m.key);
+    // A later milestone ticked while an earlier one is empty = an audit gap.
+    function gapsOf(ms) {
+      const out = []; let later = false;
+      for (let i = MS_KEYS.length - 1; i >= 0; i--) {
+        if (ms[MS_KEYS[i]]) later = true; else if (later) out.push(MS_KEYS[i]);
+      }
+      return out.reverse();
+    }
+    function fmtDate(s) {
+      if (!s) return '';
+      const d = new Date(String(s).replace(' ', 'T') + 'Z');
+      return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    const drawerHidden = () => document.getElementById('dr-back').classList.contains('hidden');
+    function pipeFor(c, roleId) {
+      return (c.pipeline && c.pipeline[roleId]) ||
+        { ms: {}, rank: 'primary', disposition: '', status: (c.assignments && c.assignments[roleId]) || 'submitted', gaps: [] };
+    }
+    function ensurePipe(c, roleId) {
+      c.pipeline = c.pipeline || {};
+      if (!c.pipeline[roleId]) c.pipeline[roleId] = { ms: {}, rank: 'primary', disposition: '', status: 'submitted', gaps: [] };
+      return c.pipeline[roleId];
+    }
+
+    // The progress strip + rank/disposition for one assigned role, in the drawer.
+    function roleBlockHtml(c, r) {
+      const p = pipeFor(c, r.id), ms = p.ms || {};
+      const gaps = new Set(p.gaps && p.gaps.length ? p.gaps : gapsOf(ms));
+      const nodes = MS_META.map((m) => {
+        const on = !!ms[m.key], gap = gaps.has(m.key);
+        const cls = ['pnode', on ? 'on' : '', gap ? 'gap' : '', m.tier].filter(Boolean).join(' ');
+        const glyph = gap ? '!' : on ? '✓' : '';
+        const t = on ? fmtDate(ms[m.key]) : gap ? 'skipped' : '';
+        return `<button class="${cls}" onclick="tickMs('${c.id}','${r.id}','${m.key}',${!on})" title="${esc(m.label)}"><span class="prail"></span><span class="pdot">${glyph}</span><span class="plabel">${m.short}</span><span class="ptime">${t}</span></button>`;
+      }).join('');
+      const rank = p.rank || 'primary', disp = p.disposition || '';
+      const rankSeg = `<div class="pseg">
+        <button class="${rank==='primary'?'on':''}" onclick="setRankAxis('${c.id}','${r.id}','primary')">Primary</button>
+        <button class="${rank==='backup'?'on':''}" onclick="setRankAxis('${c.id}','${r.id}','backup')">Backup</button></div>`;
+      const dispRow = `<div class="pchips">
+        <button class="pchip ${disp==='pass'?'on':''}" onclick="setDispAxis('${c.id}','${r.id}','pass')">Pass</button>
+        <button class="pchip ${disp==='unavailable'?'on':''}" onclick="setDispAxis('${c.id}','${r.id}','unavailable')">Unavail</button></div>`;
+      const g = [...gaps];
+      const flag = g.length
+        ? `<div class="pflag">⚠ ${g.map(k => MS_META.find(m => m.key === k).label).join(', ')} skipped — committed past the client sign-off</div>`
+        : disp === 'unavailable' ? `<div class="pflag pflag--red">⚑ Unavailable — promote an approved backup for this role</div>` : '';
+      return `<div class="pblock">
+        <div class="pblock__head">
+          <button class="role-toggle on" onclick="toggleAssign('${c.id}','${r.id}')" title="Remove from this role">
+            <span class="role-toggle__box">✓</span><span><b>${esc(r.name)}</b> · ${esc(r.character||'')}</span>
+          </button>
+        </div>
+        <div class="pstrip">${nodes}</div>
+        <div class="paxes">${rankSeg}${dispRow}</div>
+        ${flag}
+      </div>`;
+    }
+
+    // Tick/untick one milestone. Booked/Confirmed write the Job Log (Confirmed →
+    // call sheet), so they confirm on the way ON.
+    async function tickMs(id, roleId, key, on) {
+      const c = byId(id); if (!c) return;
+      if (on && (key === 'booked' || key === 'confirmed')) {
+        const r = roleById(roleId);
+        const verb = key === 'confirmed' ? 'Confirm' : 'Book';
+        const note = key === 'confirmed' ? 'adds them to the call sheet (Job Log → Confirmed)' : 'writes a pending Talent row to the HoldCrew Job Log';
+        if (!confirm(`${verb} ${c.name}${r ? ' as ' + r.name : ''}?\n\nThis ${note}.`)) return;
+      }
+      try {
+        const res = await api.send('PUT', '/api/casting/assignments/milestone', { candidateId: id, roleId, milestone: key, on });
+        const p = ensurePipe(c, roleId);
+        p.ms[key] = on ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+        p.status = res.status; p.gaps = gapsOf(p.ms);
+        c.assignments = c.assignments || {}; c.assignments[roleId] = res.status;
+        if (!drawerHidden()) openDrawer(id);
+        render();
+        if (on && (key === 'booked' || key === 'confirmed')) {
+          if (res.promoted) toast(`${key === 'confirmed' ? 'Confirmed' : 'Booked'} — Job Log updated.`);
+          else toast(`Saved here, but the Job Log write failed${res.error ? ' (' + res.error + ')' : ''}. Retry.`, true);
+        }
+      } catch (e) { if (e.message === 'auth') return; toast('Could not update the milestone.', true); }
+    }
+    async function setRankAxis(id, roleId, rank) {
+      const c = byId(id); if (!c) return;
+      try {
+        const res = await api.send('PUT', '/api/casting/assignments/rank', { candidateId: id, roleId, rank });
+        const p = ensurePipe(c, roleId); p.rank = res.rank; p.status = res.status;
+        c.assignments = c.assignments || {}; c.assignments[roleId] = res.status;
+        if (!drawerHidden()) openDrawer(id); render();
+      } catch (e) { if (e.message === 'auth') return; toast('Could not set rank.', true); }
+    }
+    async function setDispAxis(id, roleId, disp) {
+      const c = byId(id); if (!c) return;
+      const next = pipeFor(c, roleId).disposition === disp ? '' : disp;   // tap again to clear
+      try {
+        const res = await api.send('PUT', '/api/casting/assignments/disposition', { candidateId: id, roleId, disposition: next });
+        const p = ensurePipe(c, roleId); p.disposition = res.disposition; p.status = res.status;
+        c.assignments = c.assignments || {}; c.assignments[roleId] = res.status;
+        if (!drawerHidden()) openDrawer(id); render();
+      } catch (e) { if (e.message === 'auth') return; toast('Could not set disposition.', true); }
+    }
+
+    // ── BOOKING: the whole pipeline at a glance, with the gap flags ──
+    function bookingView() {
+      if (!roles.length) return `<div class="cast-empty"><p>Add roles and shortlist actors to see the booking pipeline.</p></div>`;
+      let totalGaps = 0;
+      const secs = roles.map(r => {
+        const members = cands
+          .filter(c => c.assignments && r.id in c.assignments && onSelects(c.assignments[r.id]))
+          .sort((a, b) => (STATUS[a.assignments[r.id]].order - STATUS[b.assignments[r.id]].order) || a.name.localeCompare(b.name));
+        if (!members.length) return '';
+        const rows = members.map(c => {
+          const p = pipeFor(c, r.id), ms = p.ms || {};
+          const gaps = new Set(p.gaps && p.gaps.length ? p.gaps : gapsOf(ms));
+          if (gaps.size) totalGaps++;
+          const mini = MS_META.map((m, i) => {
+            const on = !!ms[m.key], gap = gaps.has(m.key);
+            const t = m.tier === 't-book' ? 'b' : m.tier === 't-confirm' ? 'c' : '';
+            return (i ? `<span class="mbar ${on?'on':''}"></span>` : '') + `<i class="${on?'on '+t:''}${gap?' gap':''}"></i>`;
+          }).join('');
+          const badges = [];
+          if (gaps.size) badges.push(`<span class="bk-badge b-gap">⚠ ${MS_META.find(m => m.key === [...gaps][0]).short} skipped</span>`);
+          if (p.disposition === 'unavailable') badges.push('<span class="bk-badge b-unavail">Unavailable</span>');
+          else if (p.disposition === 'pass') badges.push('<span class="bk-badge b-pass">Pass</span>');
+          // status already reads "Backup" for a non-committed backup; only tag the
+          // ones a commitment (Booked/Confirmed) would otherwise hide.
+          else if (p.rank === 'backup' && c.assignments[r.id] !== 'backup') badges.push('<span class="bk-badge b-backup">Backup</span>');
+          badges.push(statusBadge(c.assignments[r.id]));
+          return `<div class="bk-row ${p.disposition==='pass'?'passed':''}" onclick="openDrawer('${c.id}')">
+            <img class="bk-thumb" src="${esc(photoUrl(c))}" alt="" loading="lazy">
+            <div class="bk-who"><div class="bk-name">${esc(c.name)}</div><div class="bk-role">${esc(r.name)}</div></div>
+            <div class="bk-mini">${mini}</div>
+            <div class="bk-end">${badges.join('')}</div>
+          </div>`;
+        }).join('');
+        return `<div class="bk-sec"><div class="bk-sec__head"><span class="bk-sec__name">${esc(r.name)}</span><span class="bk-sec__char">${esc(r.character||'')}</span></div>${rows}</div>`;
+      }).join('');
+      const banner = totalGaps
+        ? `<div class="bk-banner warn">⚠ ${totalGaps} with an audit gap — committed past a missing earlier sign-off</div>`
+        : `<div class="bk-banner ok">✓ No audit gaps — every commitment has its earlier stages ticked</div>`;
+      return banner + (secs || `<div class="cast-empty"><p>No one shortlisted yet — shortlist actors from the General Call.</p></div>`);
+    }
+
     // ── candidate drawer (shared by both tabs) ──
     function openDrawer(id) {
       const c = byId(id);
@@ -815,35 +1076,14 @@
         ? `<span class="vchip" onclick="openVideo('${c.id}')"><span class="vchip__play">▶</span>${nt > 1 ? nt + ' casting tapes' : 'Casting tape'}</span>`
         : `<span class="vchip vchip--none">No tape submitted</span>`;
       const asg = c.assignments || {};
-      const roleRows = roles.map(r => {
-        const on = r.id in asg;
-        const st = on ? asg[r.id] : '';
-        // Hold + Book are commitments that write the Job Log, so they're reachable
-        // only via their buttons — never manual dropdown choices (keeps held ⟺
-        // pending-in-Job-Log and booked ⟺ confirmed-in-Job-Log).
-        const opts = STATUS_KEYS.filter(k => k !== 'hold' && k !== 'booked')
-          .map(k => `<option value="${k}" ${st===k?'selected':''}>${STATUS[k].label}</option>`).join('');
-        let ctrl;
-        if (st === 'booked') {
-          ctrl = `<span class="rr-booked" title="Written to the HoldCrew Job Log as confirmed Talent">✓ Booked · Job Log</span>
-            <button class="rr-unbook" title="Undo (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
-        } else if (st === 'hold') {
-          ctrl = `<span class="rr-held" title="Written to the HoldCrew Job Log as pending (held) Talent">◷ Held · Job Log</span>
-            <button class="rr-book" title="Confirm the hold → Book" onclick="bookRole('${c.id}','${r.id}')">Book</button>
-            <button class="rr-unbook" title="Undo (leaves the Job Log row in place)" onclick="setStatus('${c.id}','${r.id}','select')">✕</button>`;
-        } else {
-          ctrl = `<select class="st-select" ${on?'':'disabled'} onchange="setStatus('${c.id}','${r.id}',this.value)">${opts}</select>` +
-            (on ? `<button class="rr-hold" onclick="holdRole('${c.id}','${r.id}')">Hold</button>
-                   <button class="rr-book" onclick="bookRole('${c.id}','${r.id}')">Book</button>` : '');
-        }
-        return `<div class="rolerow">
-          <button class="role-toggle ${on?'on':''}" onclick="toggleAssign('${c.id}','${r.id}')">
-            <span class="role-toggle__box">${on?'✓':''}</span>
-            <span><b>${esc(r.name)}</b> · ${esc(r.character||'')}</span>
-          </button>
-          ${ctrl}
-        </div>`;
-      }).join('') || `<div class="role-empty">No roles defined yet — add one on the Selects tab.</div>`;
+      const assignedRoles = roles.filter(r => r.id in asg);
+      const unassignedRoles = roles.filter(r => !(r.id in asg));
+      const roleRows = !roles.length
+        ? `<div class="role-empty">No roles defined yet — add one on the Selects tab.</div>`
+        : (assignedRoles.map(r => roleBlockHtml(c, r)).join('')
+           + (unassignedRoles.length
+              ? `<div class="add-roles">${unassignedRoles.map(r => `<button class="add-role-chip" onclick="toggleAssign('${c.id}','${r.id}')">+ ${esc(r.name)}</button>`).join('')}</div>`
+              : ''));
 
       const av = c.avail || {};
       const availHtml = ['travel','fitting','shoot'].map(k => {
@@ -942,47 +1182,8 @@
         alert('Could not update the role assignment.');
       }
     }
-    async function setStatus(id, roleId, val) {
-      const c = byId(id); if (!c) return;
-      try {
-        const res = await api.send('PUT', '/api/casting/assignments', { candidateId: id, roleId, status: val });
-        if (c.assignments && roleId in c.assignments) c.assignments[roleId] = (res && res.status) || val;
-        // refresh the drawer only if it's actually open (so the Book/Booked control updates in place)
-        if (!document.getElementById('dr-back').classList.contains('hidden')) openDrawer(id);
-        render();
-      } catch (e) {
-        if (e.message === 'auth') return;
-        alert('Could not update the status.');
-      }
-    }
-
-    // Hold / Book — the two commitments that write the HoldCrew Job Log (Hold =
-    // pending Talent row, Book = confirmed Talent → syncs to the call sheet). The
-    // single cross-system write; see src/holdcrew.js. Idempotent on the HoldCrew
-    // side (upsert by name+job), so Hold → Book just flips the row to Confirmed.
-    const COMMIT = {
-      hold: { path: 'hold', status: 'hold',   verb: 'Hold', done: 'Held',   note: 'as pending (held) Talent' },
-      book: { path: 'book', status: 'booked', verb: 'Book', done: 'Booked', note: 'as confirmed Talent' },
-    };
-    async function commitRole(id, roleId, action) {
-      const c = byId(id); if (!c) return;
-      const r = roleById(roleId);
-      const m = COMMIT[action];
-      if (!confirm(`${m.verb} ${c.name}${r ? ' as ' + r.name : ''}?\n\nThis adds them to this job's HoldCrew Job Log ${m.note}.`)) return;
-      try {
-        const res = await api.send('POST', `/api/casting/candidates/${id}/${m.path}`, { roleId });
-        c.assignments = c.assignments || {};
-        c.assignments[roleId] = m.status;
-        openDrawer(id); render();
-        if (res && res.promoted) toast(`${m.done} — added to the Job Log.`);
-        else toast(`${m.done} here, but the Job Log write failed${res && res.error ? ' (' + res.error + ')' : ''}. Retry.`, true);
-      } catch (e) {
-        if (e.message === 'auth') return;
-        toast(`Could not ${m.verb.toLowerCase()}: ` + e.message, true);
-      }
-    }
-    const holdRole = (id, roleId) => commitRole(id, roleId, 'hold');
-    const bookRole = (id, roleId) => commitRole(id, roleId, 'book');
+    // Booking a role (Booked/Confirmed milestones) + the earlier ticks now happen on
+    // the drawer's progress strip — see tickMs / setRankAxis / setDispAxis above.
 
     // transient toast (bottom-center)
     let toastTimer;
