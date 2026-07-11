@@ -110,7 +110,7 @@ Pass/Unavailable). Build order: (1) pipeline model + renames ✅, (2) audit UI, 
 `job.html` Workflow grid (repo `/root/projects/holdcrew`, `html-v3/job.html`, deploy `./deploy_v3.sh`)
 opens `<slug>.casting.holdcrew.com/casting?job=<suffix>` (host-derived, new tab). Gated to
 casting-onboarded tenants via a dev allowlist (`CASTING_SLUGS = ['upshot','test']`) → becomes a
-registry flag at GA. Commit `21726b5` in the holdcrew repo.
+registry flag at GA. Commit `822bcda` in the holdcrew repo (collision-safe redo after an earlier COMPANY_SLUG clash — see [[feedback_holdcrew_global_collision]]).
 **NOT DONE (other):** CSV import UI polish, drawer single-role simplification, transcode-to-spec
 decision, show/hide-backups-per-page toggle, drag-reorder of page items.
 - Onboard more tenants: `node scripts/onboard-tenant.js <slug> "<Name>" <password>`; reset a password by
