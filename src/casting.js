@@ -15,6 +15,7 @@ const wasabi = require('./wasabi');
 const holdcrew = require('./holdcrew');
 const pipeline = require('./pipeline');
 const { mediaKey } = require('./tenant');
+const { serveMedia, writeBuffer, writeFromFile, removeLocal } = require('./media');
 const { projectId, roleId, candidateId, assignmentId, mediaId, comboId, comboSlotId, rand } = require('./ids');
 
 const router = express.Router();
@@ -185,10 +186,10 @@ router.delete('/media/:id', (req, res) => {
   res.status(204).end();
 });
 
-// ── Headshot upload — the raw image body streams straight to Wasabi ──────────
+// ── Headshot upload — the raw image body is written to the local media store ──
 // The photo IS the identifier in casting, so this is core. Key includes a random
-// so each upload is a fresh URL (no stale-cache on replace); the old object is
-// deleted. Tenant-scoped key (mediaKey) satisfies the /media presign guard.
+// so each upload is a fresh path (no stale-cache on replace); the old object is
+// deleted. Wasabi is retired — the on-disk store is the source of truth.
 const rawImage = express.raw({ type: ['image/*'], limit: '20mb' });
 router.post('/candidates/:id/headshot', rawImage, async (req, res) => {
   const t = eff(req);
@@ -201,12 +202,12 @@ router.post('/candidates/:id/headshot', rawImage, async (req, res) => {
   const project = db.prepare('SELECT job FROM casting_projects WHERE id = ?').get(cand.project_id);
   const key = mediaKey(t, project.job, cand.id, `headshot-${rand(6)}.${ext}`);
   try {
-    await wasabi.uploadBuffer(key, buf, ct);
-    if (cand.headshot_key && cand.headshot_key !== key) { try { await wasabi.deleteObject(cand.headshot_key); } catch (e) { /* orphan, non-fatal */ } }
+    writeBuffer(key, buf);
+    if (cand.headshot_key && cand.headshot_key !== key) removeLocal(cand.headshot_key);
     db.prepare("UPDATE casting_candidates SET headshot_key = ?, updated_at = datetime('now') WHERE id = ?").run(key, cand.id);
     res.status(201).json({ ok: true, headshotKey: key });
   } catch (e) {
-    res.status(502).json({ error: 'upload_failed', detail: e.message });
+    res.status(500).json({ error: 'upload_failed', detail: e.message });
   }
 });
 
@@ -236,7 +237,7 @@ router.post('/candidates/:id/tape', (req, res) => {
     if (done) return;
     try {
       if (!fs.statSync(tmp).size) return fail(400, 'empty_body');
-      await wasabi.uploadObject(key, tmp, ct);
+      writeFromFile(key, tmp);   // moves tmp into the local store (Wasabi retired)
       const id = mediaId();
       const lbl = label || `Take ${ord + 1}`;
       db.prepare("INSERT INTO casting_media (id, candidate_id, tenant, project_id, kind, key, label, ord) VALUES (?, ?, ?, ?, 'tape', ?, ?, ?)")
@@ -393,8 +394,17 @@ function ensureAsg(t, candId, roleId) {
 // sheet/DPR). The local tick always succeeds; the Job Log write is reported honestly
 // — on failure the tick stands and the UI says retry. Reached from the Booked/Confirmed
 // buttons AND from ticking those milestones on the audit strip, so it lives here once.
-async function commitMilestone(t, cand, role, asgId, milestone) {
-  const status = pipeline.setMilestone(db, asgId, milestone, true);
+// Mirror casting's derived committing state into the HoldCrew Job Log. The milestones
+// are independently tickable (audit strip), so we ALWAYS re-derive the Job Log status
+// from the FURTHEST committing milestone rather than the one just tapped:
+//   • tick an earlier stage → a Confirmed talent STAYS Confirmed (no accidental
+//     downgrade — Brian Le, 2026-07-12; order can't be assumed);
+//   • un-tick Confirmed/Booked → they downgrade to pending (''), which drops them off
+//     the call sheet (Eric: must be able to downgrade).
+// Confirmed iff the confirmed milestone is set; otherwise pending. The local tick always
+// stands; the Job Log write is reported honestly (retry on failure).
+async function syncTalentToJobLog(t, cand, role, asgId) {
+  const confirmed = !!db.prepare('SELECT ms_confirmed FROM casting_assignments WHERE id = ?').get(asgId).ms_confirmed;
   const project = db.prepare('SELECT job FROM casting_projects WHERE id = ?').get(cand.project_id);
   const talent = {
     name: cand.name,
@@ -409,14 +419,22 @@ async function commitMilestone(t, cand, role, asgId, milestone) {
     notes: cand.note || '',
     sessionCost: cand.session_fee || '',   // usage/buyout/fees ride along (placeholder)
     usageCost: cand.usage_fee || '',
-    status: milestone === 'confirmed' ? 'Confirmed' : '',
+    status: confirmed ? 'Confirmed' : '',
   };
   try {
     const jobLog = await holdcrew.promoteToJobLog(t, project.job, talent);
-    return { status, promoted: true, jobLog };
+    return { promoted: true, jobLog };
   } catch (e) {
-    return { status, promoted: false, error: e.message };
+    return { promoted: false, error: e.message };
   }
+}
+
+// Set a committing milestone (Booked/Confirmed) then re-sync the Job Log. Reached from the
+// Booked/Confirmed buttons; the audit strip drives the same seam via setMilestone + sync.
+async function commitMilestone(t, cand, role, asgId, milestone) {
+  const status = pipeline.setMilestone(db, asgId, milestone, true);
+  const out = await syncTalentToJobLog(t, cand, role, asgId);
+  return { status, ...out };
 }
 
 async function commitToRole(req, res, milestone) {
@@ -441,11 +459,14 @@ router.put('/assignments/milestone', async (req, res) => {
   const milestone = String(req.body?.milestone || '');
   if (!pipeline.MS_COL[milestone]) return res.status(400).json({ error: 'bad_milestone' });
   const on = req.body?.on !== false && req.body?.on !== 'false';
-  if (on && (milestone === 'booked' || milestone === 'confirmed')) {
-    const out = await commitMilestone(t, r.cand, r.role, r.asgId, milestone);
-    return res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, milestone, on, company: t, ...out });
-  }
   const status = pipeline.setMilestone(db, r.asgId, milestone, on);
+  // Booked/Confirmed changes re-sync the Job Log EITHER direction: ticking (incl. an
+  // earlier stage) never downgrades a Confirmed talent; un-ticking Confirmed/Booked
+  // downgrades them (off the call sheet). Every other tick is local-only.
+  if (milestone === 'booked' || milestone === 'confirmed') {
+    const out = await syncTalentToJobLog(t, r.cand, r.role, r.asgId);
+    return res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, milestone, on, status, company: t, ...out });
+  }
   res.json({ ok: true, candidateId: r.cand.id, roleId: r.role.id, milestone, on, status });
 });
 
@@ -549,13 +570,9 @@ router.get('/media', async (req, res) => {
   const t = eff(req);
   const key = String(req.query.key || '');
   if (!key || !key.startsWith(t + '/')) return res.status(403).json({ error: 'forbidden' });
-  try {
-    const url = await wasabi.presignKey(key);
-    res.set('Cache-Control', 'no-store');
-    res.redirect(302, url);
-  } catch (e) {
-    res.status(502).json({ error: 'presign_failed' });
-  }
+  // Local-disk-first (Wasabi retired/erased); serveMedia falls back to a presign
+  // only if the object still lives in a configured bucket. See src/media.js.
+  return serveMedia(key, res);
 });
 
 // ── Import (CSV/Fillout) — upsert candidates into the General Call pool ───────

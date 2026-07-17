@@ -8,6 +8,7 @@
 const express = require('express');
 const db = require('./db');
 const wasabi = require('./wasabi');
+const { serveMedia } = require('./media');
 const { pageId, pageItemId, shareToken } = require('./ids');
 
 const eff = (req) => req.tenant.slug;
@@ -211,13 +212,8 @@ pub.get('/:token/media', async (req, res) => {
   if (!page) return res.status(404).json({ error: 'not_found' });
   const key = String(req.query.key || '');
   if (!key || !key.startsWith(page.tenant + '/')) return res.status(403).json({ error: 'forbidden' });
-  try {
-    const url = await wasabi.presignKey(key);
-    res.set('Cache-Control', 'no-store');
-    res.redirect(302, url);
-  } catch (e) {
-    res.status(502).json({ error: 'presign_failed' });
-  }
+  // Local-disk-first (Wasabi retired/erased), presign fallback. See src/media.js.
+  return serveMedia(key, res);
 });
 
 module.exports = { producer, public: pub, buildLookbook };
